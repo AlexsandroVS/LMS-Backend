@@ -4,10 +4,7 @@ exports.protect = async (req, res, next) => {
   try {
     // 1. Obtener token
     let token;
-    if (
-      req.headers.authorization &&
-      req.headers.authorization.startsWith('Bearer')
-    ) {
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       token = req.headers.authorization.split(' ')[1];
     }
 
@@ -25,7 +22,6 @@ exports.protect = async (req, res, next) => {
     res.status(401).json({ error: 'Token inválido o expirado' });
   }
 };
-
 exports.restrictTo = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {

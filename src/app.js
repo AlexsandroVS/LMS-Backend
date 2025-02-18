@@ -18,23 +18,16 @@ app.use(express.json());
 // Configurar carpeta estática para servir imágenes
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Configurar Multer para guardar archivos en la carpeta "uploads"
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-      cb(null, "uploads/"); // Carpeta donde se guardan las imágenes
-    },
-    filename: (req, file, cb) => {
-      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-      cb(null, uniqueSuffix + path.extname(file.originalname)); // Nombre único para cada imagen
-    }
-  });
-
+// Configurar Multer para guardar archivos en "uploads"
+const storage = multer.diskStorage({ /* ... */ });
 const upload = multer({ storage });
 
 // Rutas
 app.use("/api/users", require("./routes/users"));
 app.use("/api/courses", require("./routes/courses"));
 app.use("/api/auth", require("./routes/auth"));
+app.use("/api", require("./routes/modules"));
+app.use("/api", require("./routes/activities"));
 
 // Manejador de errores
 app.use((err, req, res, next) => {
@@ -46,4 +39,4 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Servidor corriendo en http://localhost:${PORT}`));
 app.use("/uploads", express.static("uploads"));
 
-module.exports = { app, upload }; // Exportar `upload` para usar en los controladores
+module.exports = { app, upload };

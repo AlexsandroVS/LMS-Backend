@@ -1,7 +1,8 @@
 // src/controllers/authController.js
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
-const bcrypt = require("bcrypt");
+const bcrypt = require('bcrypt'); // Asegúrate de importar bcrypt
+
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -18,28 +19,19 @@ const generateToken = (user) => {
 exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    const user = await User.getByEmail(email);
+    const user = await User.getByEmail(email);  // Usar getByEmail
 
-    console.log("Usuario encontrado:", user);
     if (!user) {
       return res.status(401).json({ error: "Usuario no encontrado" });
     }
 
-    console.log("🔹 Contraseña recibida en login:", password);
-    console.log("🔹 Contraseña en la BD:", user.Password);
-
     const isMatch = await bcrypt.compare(password, user.Password);
-    console.log("🔹 Coincidencia de contraseña:", isMatch);
     if (!isMatch) {
       return res.status(401).json({ error: "Credenciales incorrectas" });
     }
 
-    // Marcar al usuario como activo
-    await User.update(user.UserID, { isActive: true });
+    const token = generateToken(user); // Generar el token
 
-    // Generar token
-    const token = generateToken(user);
-    const avatarUrl = user.Avatar; // Se asume que ya viene formateado
     res.json({
       token,
       user: {
@@ -47,8 +39,7 @@ exports.login = async (req, res, next) => {
         name: user.Name,
         email: user.Email,
         role: user.Role,
-        avatar: avatarUrl,
-        lastLogin: user.isActive ? "Activo" : user.LastLogin, // Se mostrará "Activo"
+        avatar: user.Avatar,
       },
     });
   } catch (error) {
@@ -99,12 +90,18 @@ exports.register = async (req, res, next) => {
 
 exports.getMe = async (req, res, next) => {
   try {
-    const user = await User.getById(req.user.id);
+    const token = req.headers.authorization?.split(" ")[1]; // Obtener el token del header
+    if (!token) {
+      return res.status(401).json({ error: "Token no proporcionado" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET); // Decodificar el token
+    const user = await User.getByEmail(decoded.email); // Obtener el usuario usando el email decodificado
+
     if (!user) {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
-    // Si el usuario está activo, mostrar "Activo", de lo contrario, formatear LastLogin
-    const lastLoginDisplay = user.isActive ? "Activo" : user.LastLogin ? new Date(user.LastLogin).toLocaleString() : "-";
+
     res.json({
       user: {
         id: user.UserID,
@@ -112,22 +109,18 @@ exports.getMe = async (req, res, next) => {
         email: user.Email,
         role: user.Role,
         avatar: user.Avatar,
-        lastLogin: lastLoginDisplay,
       },
     });
   } catch (error) {
-    next(error);
+    console.error("Error al obtener el usuario:", error);
+    res.status(500).json({ error: "Error al verificar autenticación" });
   }
 };
 
-// Implementación del logout en authController
 exports.logout = async (req, res, next) => {
   try {
-    // Se asume que el middleware protect ya ha colocado el token decodificado en req.user
     const userId = req.user.id;
-    // Actualizar LastLogin a la fecha y hora actuales, y marcar al usuario como inactivo
     await User.update(userId, { LastLogin: new Date(), isActive: false });
-    // Opcional: Puedes invalidar el token en el lado del cliente (por ejemplo, eliminándolo del localStorage)
     res.json({ message: "Sesión cerrada correctamente" });
   } catch (error) {
     console.error("❌ Error en logout:", error);

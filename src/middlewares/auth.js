@@ -22,6 +22,7 @@ exports.protect = async (req, res, next) => {
     res.status(401).json({ error: 'Token inválido o expirado' });
   }
 };
+
 exports.restrictTo = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {

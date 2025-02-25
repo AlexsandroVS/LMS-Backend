@@ -1,5 +1,5 @@
 // src/models/Activity.js
-const pool = require('../config/db'); // Importa el pool con promesas
+const pool = require("../config/db"); // Importa el pool con promesas
 
 const Activity = {
   async getAllByModuleId(moduleId) {
@@ -31,17 +31,17 @@ const Activity = {
   async create(activityData) {
     const conn = await pool.getConnection();
     try {
-      const result = await conn.query(
-        `INSERT INTO Activities (ModuleID, Type, Title, Content, Deadline) VALUES (?, ?, ?, ?, ?)`,
+      const [result] = await conn.query(
+        "INSERT INTO Activities (ModuleID, Title, Content, Type, Deadline) VALUES (?, ?, ?, ?, ?)",
         [
-          activityData.moduleId,
-          activityData.type,
-          activityData.title,
-          activityData.content,
-          activityData.deadline,
+          activityData.ModuleID,
+          activityData.Title,
+          activityData.Content,
+          activityData.Type,
+          activityData.Deadline,
         ]
       );
-      return result[0].insertId; // Obtener el ID del registro insertado
+      return result.insertId; // Retorna el ID de la actividad creada
     } finally {
       conn.release();
     }
@@ -54,10 +54,10 @@ const Activity = {
       const params = [];
 
       const fieldMap = {
-        type: 'Type',
-        title: 'Title',
-        content: 'Content',
-        deadline: 'Deadline',
+        type: "Type",
+        title: "Title",
+        content: "Content",
+        deadline: "Deadline",
       };
 
       Object.entries(fieldMap).forEach(([key, dbField]) => {
@@ -69,7 +69,9 @@ const Activity = {
 
       if (updates.length === 0) return { affectedRows: 0 };
 
-      const sql = `UPDATE Activities SET ${updates.join(', ')} WHERE ActivityID = ?`;
+      const sql = `UPDATE Activities SET ${updates.join(
+        ", "
+      )} WHERE ActivityID = ?`;
       params.push(id);
 
       const [result] = await conn.query(sql, params);
@@ -79,11 +81,17 @@ const Activity = {
     }
   },
 
+  // En el modelo Activity.js
   async delete(id) {
     const conn = await pool.getConnection();
     try {
-      const result = await conn.query('DELETE FROM Activities WHERE ActivityID = ?', [id]);
-      return result.affectedRows > 0; // Retorna `true` si se eliminó correctamente
+      const [result] = await conn.query(
+        // Desestructura el array para obtener el primer elemento
+        "DELETE FROM Activities WHERE ActivityID = ?",
+        [id]
+      );
+      console.log(`Eliminación de actividad con ID ${id}:`, result);
+      return result.affectedRows > 0;
     } finally {
       conn.release();
     }

@@ -45,8 +45,10 @@ exports.getCourseById = async (req, res, next) => {
       durationHours: course.DurationHours,
       createdBy: course.CreatedBy,
       createdByName: course.CreatedByName,
-      color: course.Color || "#48CAE4",
+      color: course.Color || "#48CAE4", // Si no tiene color, usar un valor por defecto
     };
+
+    console.log("Mapa: "  )
 
     res.json(mappedCourse);
   } catch (error) {

@@ -1,11 +1,16 @@
 const pool = require("../config/db");
 const allowedTypes = [
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "image/jpeg",
-  "image/png",
+  "application/pdf",  // PDF
+  "application/msword",  // Word (.doc)
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // Word (.docx)
+  "image/jpeg", // JPEG
+  "image/png", // PNG
+  "video/mp4", // MP4
+  "video/avi", // AVI
+  "video/mov", // MOV
+  "video/webm", // WebM
 ];
+
 const File = {
   async create(fileData) {
     if (!allowedTypes.includes(fileData.FileType)) {

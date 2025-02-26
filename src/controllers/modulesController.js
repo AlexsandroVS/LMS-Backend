@@ -8,7 +8,6 @@ const Module = require("../models/Module");
 exports.getCourseModules = async (req, res, next) => { 
   try {
     const modules = await Module.getByCourseId(req.params.courseId);
-    console.log("📌 Módulos obtenidos:", modules);
 
     // Asegúrate de mapear las columnas correctamente
     const mappedModules = modules.map((module) => ({
@@ -25,7 +24,6 @@ exports.getCourseModules = async (req, res, next) => {
     res.status(500).json({ message: "Error al obtener módulos" });
   }
 };
-
 
 
 /**

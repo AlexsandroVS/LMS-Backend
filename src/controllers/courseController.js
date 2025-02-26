@@ -5,9 +5,6 @@ exports.getAllCourses = async (req, res, next) => {
   try {
     const dbCourses = await Course.getAll();
 
-    // Verifica la estructura de los datos
-    console.log("Cursos obtenidos de la base de datos:", dbCourses);
-
     // Verifica que dbCourses[0] contiene los datos
     const courses = dbCourses[0].map((c) => ({
       id: c.CourseID,
@@ -21,21 +18,18 @@ exports.getAllCourses = async (req, res, next) => {
       color: c.Color || "#48CAE4", // Se asegura de que siempre haya un color
     }));
 
-    console.log("Cursos mapeados:", courses);
-
     res.json(courses);
   } catch (error) {
     next(error);
   }
 };
 
-
 exports.getCourseById = async (req, res, next) => {
   try {
     const course = await Course.getById(req.params.id);
     if (!course) return res.status(404).json({ error: 'Curso no encontrado' });
 
-    // Mapear también color al devolver un solo curso
+    // Mapeo del curso para devolver todos los datos
     const mappedCourse = {
       id: course.CourseID,
       title: course.Title,
@@ -45,20 +39,19 @@ exports.getCourseById = async (req, res, next) => {
       durationHours: course.DurationHours,
       createdBy: course.CreatedBy,
       createdByName: course.CreatedByName,
-      color: course.Color || "#48CAE4", // Si no tiene color, usar un valor por defecto
+      color: course.Color || "#48CAE4", // Si no tiene color, usamos un valor por defecto
+      createdAt: course.CreatedAt, // Agregar fecha de creación si la necesitas
     };
 
-    console.log("Mapa: "  )
-
-    res.json(mappedCourse);
+    res.json(mappedCourse); // Devolver todo el objeto del curso mapeado
   } catch (error) {
     next(error);
   }
 };
 
+
 exports.createCourse = async (req, res, next) => {
   try {
-    console.log("Datos recibidos en createCourse:", req.body);
     const courseId = await Course.create(req.body);
 
     // Convertir a número si es BigInt

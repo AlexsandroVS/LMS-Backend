@@ -56,9 +56,8 @@ exports.getAllModuleActivities = async (req, res) => {
     res.status(500).json({ message: "Error interno del servidor." });
   }
 };
-// Modificación en el controlador `createActivity`
 exports.createActivity = async (req, res) => {
-  const { moduleId, courseId } = req.params;  // Capturamos directamente el `courseId` de la ruta
+  const { moduleId, courseId } = req.params;
   const { title, content, type, deadline } = req.body;
   const file = req.file;
 
@@ -104,25 +103,22 @@ exports.createActivity = async (req, res) => {
       });
     }
 
-    // Guardar el archivo localmente
-    const subFolder = (await getCourseName(courseId)).split(' ')[0]; // Usamos la primera palabra del nombre del curso como subcarpeta
-    const dirPath = path.join(__dirname, '..', '..', 'documents', subFolder);
+    // Obtener el nombre del curso y crear la subcarpeta
+    const courseName = await getCourseName(courseId);
+    const subFolder = courseName.split(' ')[0]; // Primera palabra del nombre del curso
+    const dirPath = path.join('documents', subFolder); // Ruta relativa
 
-    if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
-    }
+    // Guardar solo la ruta relativa en la base de datos
+    const relativeFilePath = path.join(dirPath, file.filename); // Ruta relativa al archivo
 
-    // Usar `file.path` en lugar de `file.buffer` porque el archivo ya se guarda en el disco
-    const filePath = path.join(dirPath, file.filename); // `file.filename` es el nombre del archivo guardado
-
-    // Preparar los datos del archivo, ahora con el `CourseID`
+    // Preparar los datos del archivo
     const fileData = {
       ActivityID: activityId,
       UserID: req.user.id,
-      CourseID: courseId, // Usamos el `CourseID` capturado de la URL
+      CourseID: courseId,
       FileName: file.originalname,
       FileType: file.mimetype,
-      Files: filePath, // Ruta completa al archivo guardado
+      Files: relativeFilePath, // Guardamos la ruta relativa
       UploadedAt: new Date(),
     };
 
@@ -153,7 +149,6 @@ exports.createActivity = async (req, res) => {
     });
   }
 };
-
 exports.updateActivity = async (req, res) => {
   const { id } = req.params;
   const { type, title, content, deadline } = req.body;
@@ -174,11 +169,26 @@ exports.deleteActivity = async (req, res) => {
   const { id } = req.params;
 
   try {
-    // Intentamos eliminar la actividad
+    // Paso 1: Eliminar los archivos asociados con esta actividad
+    const files = await File.getByActivityId(id);
+    if (files.length > 0) {
+      // Si hay archivos, eliminamos todos
+      for (const file of files) {
+        const filePath = file.Files; // Ruta del archivo
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath); // Eliminar el archivo físicamente
+        }
+        // Eliminar el archivo de la base de datos
+        await File.delete(file.FileID);
+        console.log(`Archivo con ID ${file.FileID} eliminado.`);
+      }
+    }
+
+    // Paso 2: Eliminar la actividad
     const result = await Activity.delete(id);
 
     if (result) {
-      return res.json({ message: "Actividad eliminada correctamente." });
+      return res.json({ message: "Actividad y archivos eliminados correctamente." });
     } else {
       // Si la actividad no fue eliminada, respondemos con un error de no encontrada
       return res.status(404).json({ message: "Actividad no encontrada." });
@@ -189,6 +199,7 @@ exports.deleteActivity = async (req, res) => {
     return res.status(500).json({ message: "Error interno del servidor." });
   }
 };
+
 async function getCourseName(courseId) {
   const conn = await pool.getConnection();
   try {

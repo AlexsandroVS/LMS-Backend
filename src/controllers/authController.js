@@ -8,6 +8,7 @@ const generateToken = (user) => {
   return jwt.sign(
     {
       id: user.UserID,
+      email: user.Email,  // Incluir el email en el payload
       role: user.Role,
       name: user.Name,
     },
@@ -15,6 +16,7 @@ const generateToken = (user) => {
     { expiresIn: process.env.JWT_EXPIRES_IN }
   );
 };
+
 
 exports.login = async (req, res, next) => {
   try {
@@ -29,6 +31,13 @@ exports.login = async (req, res, next) => {
     if (!isMatch) {
       return res.status(401).json({ error: "Credenciales incorrectas" });
     }
+
+    // Actualizamos el estado a "active" y el campo LastLogin con la fecha y hora actuales
+    const now = new Date();
+    await User.update(user.UserID, { 
+      LastLogin: now, 
+      isActive: true 
+    });
 
     const token = generateToken(user); // Generar el token
 
@@ -96,7 +105,13 @@ exports.getMe = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET); // Decodificar el token
-    const user = await User.getByEmail(decoded.email); // Obtener el usuario usando el email decodificado
+
+    // Verificar que el correo esté presente en el token
+    const emailFromToken = decoded.email;
+    console.log("Email decodificado desde el token:", emailFromToken);  // Verifica si el correo está en el token
+
+    // Usar el email del token para obtener el usuario
+    const user = await User.getByEmail(emailFromToken); // Buscar por email en lugar de name
 
     if (!user) {
       return res.status(404).json({ error: "Usuario no encontrado" });
@@ -120,7 +135,13 @@ exports.getMe = async (req, res, next) => {
 exports.logout = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    await User.update(userId, { LastLogin: new Date(), isActive: false });
+
+    // Actualizamos el estado a "inactive" y el campo LastLogin con la fecha y hora actuales
+    await User.update(userId, { 
+      LastLogin: new Date(), 
+      isActive: false 
+    });
+
     res.json({ message: "Sesión cerrada correctamente" });
   } catch (error) {
     console.error("❌ Error en logout:", error);

@@ -11,6 +11,7 @@ exports.getAllUsers = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+ 
 };
 
 exports.getUserById = async (req, res, next) => {
@@ -76,8 +77,6 @@ exports.updateUser = async (req, res, next) => {
     next(error);
   }
 };
-
-
 
 exports.deleteUser = async (req, res, next) => {
   try {

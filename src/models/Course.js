@@ -17,20 +17,18 @@ const Course = {
   async getById(id) {
     const conn = await pool.getConnection();
     try {
-      const rows = await conn.query(
-        `
-        SELECT c.*, u.Name as CreatedByName
-        FROM Courses c
-        JOIN Users u ON c.CreatedBy = u.UserID
-        WHERE c.CourseID = ?
-      `,
-        [id]
+      const [rows] = await conn.query(
+        `SELECT c.CourseID, c.Title, c.Description, c.Icon, c.Status, c.DurationHours, c.CreatedBy, c.CreatedAt, c.Color, u.Name as CreatedByName
+         FROM Courses c
+         JOIN Users u ON c.CreatedBy = u.UserID
+         WHERE c.CourseID = ?`, [id]
       );
-      return rows[0];
+      return rows[0];  // Asegúrate de que esto esté devolviendo el primer (y único) registro
     } finally {
       conn.release();
     }
   },
+  
 
   async create(courseData) {
     const conn = await pool.getConnection();

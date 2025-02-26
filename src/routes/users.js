@@ -29,7 +29,7 @@ const upload = multer({ storage });
 router.use(protect);
 
 // 📌 Rutas protegidas solo para administradores
-router.get("/", restrictTo("admin"), getAllUsers);
+router.get("/",  getAllUsers);
 router.post("/", restrictTo("admin"), upload.single("avatar"), createUser);
 router.delete("/:id", restrictTo("admin"), deleteUser);
 

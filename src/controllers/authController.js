@@ -108,8 +108,6 @@ exports.getMe = async (req, res, next) => {
 
     // Verificar que el correo esté presente en el token
     const emailFromToken = decoded.email;
-    console.log("Email decodificado desde el token:", emailFromToken);  // Verifica si el correo está en el token
-
     // Usar el email del token para obtener el usuario
     const user = await User.getByEmail(emailFromToken); // Buscar por email en lugar de name
 

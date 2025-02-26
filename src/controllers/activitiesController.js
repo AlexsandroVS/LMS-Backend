@@ -150,15 +150,22 @@ exports.createActivity = async (req, res) => {
   }
 };
 exports.updateActivity = async (req, res) => {
-  const { id } = req.params;
-  const { type, title, content, deadline } = req.body;
   try {
-    const updatedActivityData = { type, title, content, deadline };
-    const result = await Activity.update(id, updatedActivityData);
+    // Verificar si se proporcionan datos para actualizar
+    if (Object.keys(req.body).length === 0) {
+      return res.status(400).json({ error: 'Debe proporcionar al menos un campo para actualizar' });
+    }
+
+    // Actualizar la actividad en la base de datos
+    const result = await Activity.update(req.params.id, req.body);
+
+    // Si no se actualizó ninguna fila, indicar que no se encontró la actividad
     if (!result) {
       return res.status(404).json({ message: "Actividad no encontrada." });
     }
-    res.json({ message: "Actividad actualizada correctamente." });
+
+    // Responder con éxito
+    res.json({ message: "Actividad actualizada exitosamente" });
   } catch (error) {
     console.error("❌ Error al actualizar actividad:", error);
     res.status(500).json({ message: "Error interno del servidor." });

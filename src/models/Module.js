@@ -1,19 +1,20 @@
 // models/Module.js
-const pool = require('../config/db');
+const pool = require("../config/db");
 
 const Module = {
-  async getByCourseId(courseId, includeLocked = false) {
+  // controllers/modulesController.js
+  async getByCourseId(courseId, isAdmin = false) {
     const conn = await pool.getConnection();
     try {
       let query = `SELECT * FROM Modules WHERE CourseID = ?`;
       const params = [courseId];
-      
-      if (!includeLocked) {
-        query += ` AND IsLocked = 0`;
+
+      if (!isAdmin) {
+        query += ` AND IsLocked = 0`; // Filtrar los módulos bloqueados si no es admin
       }
-      
+
       query += ` ORDER BY ModuleOrder ASC`;
-      
+
       const [rows] = await conn.query(query, params);
       return rows;
     } finally {
@@ -21,26 +22,22 @@ const Module = {
     }
   },
 
-  // controllers/modulesController.js
-async getByCourseId(courseId, isAdmin = false) {
-  const conn = await pool.getConnection();
-  try {
-    let query = `SELECT * FROM Modules WHERE CourseID = ?`;
-    const params = [courseId];
-    
-    if (!isAdmin) {
-      query += ` AND IsLocked = 0`; // Filtrar los módulos bloqueados si no es admin
-    }
-    
-    query += ` ORDER BY ModuleOrder ASC`;
-    
-    const [rows] = await conn.query(query, params);
-    return rows;
-  } finally {
-    conn.release();
-  }
-},
+  async getById(id, isAdmin = false) {
+    const conn = await pool.getConnection();
+    try {
+      let query = `SELECT * FROM Modules WHERE ModuleID = ?`;
+      const params = [id];
 
+      if (!isAdmin) {
+        query += ` AND IsLocked = 0`; // Filtrar módulos bloqueados si no es admin
+      }
+
+      const [rows] = await conn.query(query, params);
+      return rows.length > 0 ? rows[0] : null; // Si se encuentra el módulo, devuelve la fila
+    } finally {
+      conn.release();
+    }
+  },
 
   async create(moduleData) {
     const conn = await pool.getConnection();
@@ -52,7 +49,7 @@ async getByCourseId(courseId, isAdmin = false) {
           moduleData.courseId,
           moduleData.title,
           moduleData.moduleOrder || 1,
-          moduleData.isLocked || false
+          moduleData.isLocked || false,
         ]
       );
       return result.insertId;
@@ -68,8 +65,8 @@ async getByCourseId(courseId, isAdmin = false) {
       const params = [];
 
       const fieldMap = {
-        title: 'Title',
-        moduleOrder: 'ModuleOrder'
+        title: "Title",
+        moduleOrder: "ModuleOrder",
       };
 
       Object.entries(fieldMap).forEach(([key, dbField]) => {
@@ -80,11 +77,11 @@ async getByCourseId(courseId, isAdmin = false) {
       });
 
       if (updates.length === 0) {
-        throw new Error('No fields to update');
+        throw new Error("No fields to update");
       }
 
       await conn.query(
-        `UPDATE Modules SET ${updates.join(', ')} WHERE ModuleID = ?`,
+        `UPDATE Modules SET ${updates.join(", ")} WHERE ModuleID = ?`,
         [...params, id]
       );
       return true;
@@ -96,7 +93,7 @@ async getByCourseId(courseId, isAdmin = false) {
   async delete(id) {
     const conn = await pool.getConnection();
     try {
-      await conn.query('DELETE FROM Modules WHERE ModuleID = ?', [id]);
+      await conn.query("DELETE FROM Modules WHERE ModuleID = ?", [id]);
       return true;
     } finally {
       conn.release();
@@ -113,7 +110,7 @@ async getByCourseId(courseId, isAdmin = false) {
     } finally {
       conn.release();
     }
-  }
+  },
 };
 
 module.exports = Module;

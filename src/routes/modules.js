@@ -2,22 +2,16 @@
 const express = require('express');
 const router = express.Router();
 const modulesController = require('../controllers/modulesController');
+const auth = require('../middlewares/auth');
 
-/**
- * Rutas como sub-recurso de "courses"
- * EJEMPLOS de endpoints:
- *  - GET /courses/1/modules         => Listar módulos del curso 1
- *  - POST /courses/1/modules        => Crear módulo en el curso 1
- *  - GET /courses/1/modules/5       => Obtener módulo 5 del curso 1
- *  - PUT /courses/1/modules/5       => Actualizar módulo 5 del curso 1
- *  - DELETE /courses/1/modules/5    => Eliminar módulo 5 del curso 1
- */
+// Aplicar autenticación a todas las rutas
+router.use(auth.protect);
+
 router.get('/courses/:courseId/modules', modulesController.getCourseModules);
-router.post('/courses/:courseId/modules', modulesController.createModule);
+router.post('/courses/:courseId/modules', auth.restrictTo('admin'), modulesController.createModule);
 
-// Opcional: traer un solo módulo, update y delete
 router.get('/courses/:courseId/modules/:moduleId', modulesController.getModuleById);
-router.put('/courses/:courseId/modules/:moduleId', modulesController.updateModule);
-router.delete('/courses/:courseId/modules/:moduleId', modulesController.deleteModule);
+router.put('/courses/:courseId/modules/:moduleId', auth.restrictTo('admin'), modulesController.updateModule);
+router.delete('/courses/:courseId/modules/:moduleId', auth.restrictTo('admin'), modulesController.deleteModule);
 
 module.exports = router;

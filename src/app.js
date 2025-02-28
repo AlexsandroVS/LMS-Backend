@@ -28,7 +28,9 @@ app.use("/api/courses", require("./routes/courses"));
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api", require("./routes/modules"));
 app.use("/api", require("./routes/activities"));
+app.use("/api/grades", require("./routes/grade"));
 app.use("/api", require("./routes/filesRoutes"));
+app.use("/api", require("./routes/progress"));
 
 // Manejador de errores
 app.use((err, req, res, next) => {

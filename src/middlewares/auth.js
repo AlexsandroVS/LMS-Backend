@@ -31,3 +31,9 @@ exports.restrictTo = (...roles) => {
     next();
   };
 };
+exports.checkAdmin = (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Acceso no autorizado' });
+  }
+  next();
+};

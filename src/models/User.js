@@ -1,6 +1,6 @@
 // src/models/User.js
 const pool = require("../config/db");
-const bcrypt = require('bcrypt'); // Asegúrate de importar bcrypt
+const bcrypt = require('bcrypt'); 
   
 const User = {
   async getAll() {

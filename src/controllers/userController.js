@@ -48,8 +48,6 @@ exports.createUser = async (req, res, next) => {
   }
 };
 
-
-
 exports.updateUser = async (req, res, next) => {
   try {
     const userId = req.params.id;

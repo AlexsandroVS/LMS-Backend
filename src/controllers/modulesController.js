@@ -5,17 +5,19 @@ const Module = require("../models/Module");
  * 1) Listar módulos de un curso
  *    GET /courses/:courseId/modules
  */
+// controllers/modulesController.js
 exports.getCourseModules = async (req, res, next) => { 
   try {
-    const modules = await Module.getByCourseId(req.params.courseId);
+    const isAdmin = req.user?.role === 'admin';
+    const modules = await Module.getByCourseId(req.params.courseId, isAdmin); // Obtenemos los módulos con el filtro de bloqueo
 
-    // Asegúrate de mapear las columnas correctamente
     const mappedModules = modules.map((module) => ({
-      ModuleID: module.ModuleID, // Asegúrate de que el nombre de la propiedad sea correcto
-      title: module.Title, // Cambié 'title' por 'Title'
-      moduleOrder: module.ModuleOrder, // Cambié 'moduleOrder' por 'ModuleOrder'
-      CourseID: module.CourseID, // Cambié 'courseId' por 'CourseID'
-      createdAt: module.CreatedAt, // Cambié 'createdAt' por 'CreatedAt'
+      ModuleID: module.ModuleID,
+      title: module.Title,
+      moduleOrder: module.ModuleOrder,
+      isLocked: module.IsLocked,
+      CourseID: module.CourseID,
+      createdAt: module.CreatedAt,
     }));
 
     res.json(mappedModules);
@@ -25,12 +27,6 @@ exports.getCourseModules = async (req, res, next) => {
   }
 };
 
-
-/**
- * 2) Crear un módulo en un curso
- *    POST /courses/:courseId/modules
- *    Body: { title: "Título", order: 2 }
- */
 exports.createModule = async (req, res, next) => {
   try {
     const { courseId } = req.params;
@@ -64,23 +60,21 @@ exports.createModule = async (req, res, next) => {
  * 3) Obtener un módulo específico de un curso
  *    GET /courses/:courseId/modules/:moduleId
  */
+// controllers/modulesController.j
+// controllers/modulesController.js
 exports.getModuleById = async (req, res, next) => {
   try {
-    const { moduleId } = req.params;
-    const module = await Module.getById(moduleId);
+    const module = await Module.getById(req.params.moduleId, req.user?.role === 'admin');
+    if (!module) return res.status(404).json({ error: 'Módulo no encontrado' });
 
-    if (!module) {
-      return res.status(404).json({ error: "Módulo no encontrado" });
-    }
-    // (Opcional) Verificar que module.CourseID == req.params.courseId
-    // Si NO coincide, puedes responder 404 si deseas
-    if (module.CourseID.toString() !== req.params.courseId) {
-      return res
-        .status(404)
-        .json({ error: "Módulo no pertenece a este curso" });
-    }
-
-    res.json(module);
+    res.json({
+      ModuleID: module.ModuleID,
+      title: module.Title,
+      moduleOrder: module.ModuleOrder,
+      isLocked: module.IsLocked,
+      CourseID: module.CourseID,
+      createdAt: module.CreatedAt,
+    });
   } catch (error) {
     next(error);
   }
@@ -91,15 +85,30 @@ exports.getModuleById = async (req, res, next) => {
  *    PUT /courses/:courseId/modules/:moduleId
  *    Body: { title: "Nuevo título", order: 2 }
  */
-exports.updateModule = async (req, res, next) => {
+// Controlador para actualizar módulo, puede actualizar tanto el estado de bloqueo como otros campos.
+exports.updateModule = async (req, res) => {
   try {
-    await Module.update(req.params.moduleId, req.body);
-    res.json({ message: "Módulo actualizado correctamente" });
+    const { moduleId } = req.params;
+    const { title, moduleOrder, isLocked } = req.body;
+
+    let updatedModule;
+
+    // Si solo se pasa isLocked, actualizamos únicamente ese campo
+    if (typeof isLocked !== "undefined") {
+      updatedModule = await Module.updateLock(moduleId, isLocked);
+    } 
+    // Si se pasan título o móduloOrder, actualizamos esos campos
+    else if (title || moduleOrder) {
+      updatedModule = await Module.update(moduleId, { title, moduleOrder });
+    }
+
+    res.json({ message: "Módulo actualizado exitosamente" });
   } catch (error) {
     console.error("Error al actualizar módulo:", error);
-    res.status(500).json({ error: "Error al actualizar módulo" });
+    res.status(500).json({ error: "Error al actualizar el módulo" });
   }
 };
+
 
 /**
  * 5) Eliminar un módulo de un curso

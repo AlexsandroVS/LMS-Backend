@@ -1,26 +1,25 @@
-// src/models/User.js
 const pool = require("../config/db");
-const bcrypt = require('bcrypt'); 
-  
+const bcrypt = require("bcrypt");
+
 const User = {
   async getAll() {
     const conn = await pool.getConnection();
     try {
-      const [rows] = await conn.query("SELECT * FROM Users"); // Aquí obtenemos todos los usuarios
-      return rows; // Retorna todos los usuarios
+      const [rows] = await conn.query("SELECT * FROM Users");
+      return rows;
     } finally {
       conn.release();
     }
   },
-  
+
   async getById(id) {
     const conn = await pool.getConnection();
     try {
-      const rows = await conn.query(
+      const [rows] = await conn.query(
         "SELECT UserID, Name, Email, Avatar, Role, LastLogin, isActive FROM Users WHERE UserID = ?",
         [id]
       );
-      return rows[0]; // Asegúrate de que se retorne el primer usuario encontrado
+      return rows[0];
     } finally {
       conn.release();
     }
@@ -33,9 +32,9 @@ const User = {
         "SELECT UserID, Name, Email, Avatar, Role, Password FROM Users WHERE Email = ?",
         [email]
       );
-      return rows[0]; // Devuelve el primer resultado encontrado
+      return rows[0];
     } finally {
-      conn.release(); // Asegúrate de liberar la conexión
+      conn.release();
     }
   },
 
@@ -46,6 +45,7 @@ const User = {
   async create(userData) {
     const conn = await pool.getConnection();
     try {
+      // Hashear si la contraseña no está hasheada aún
       if (userData.password && !userData.password.startsWith("$2b$10$")) {
         userData.password = await bcrypt.hash(userData.password, 10);
       }
@@ -61,7 +61,7 @@ const User = {
         ]
       );
 
-      return result.insertId; // Asegúrate de devolver el ID insertado
+      return result.insertId;
     } finally {
       conn.release();
     }
@@ -109,6 +109,12 @@ const User = {
     } finally {
       conn.release();
     }
+  },
+
+  // ✅ Función hashPassword agregada correctamente
+  async hashPassword(password) {
+    const saltRounds = 10;
+    return await bcrypt.hash(password, saltRounds);
   },
 };
 

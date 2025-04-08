@@ -46,13 +46,14 @@ async function getCourseName(courseId) {
   }
 }
 
-// Subir archivo para una actividad (ruta correcta)
+// Subir archivo para una actividad 
 router.post(
   "/courses/:courseId/modules/:moduleId/activities/:activityId/files",
   protect, // Aquí es donde se asegura la autenticación
   upload.single("file"),
   filesController.uploadFile
 );
+
 // Obtener archivos asociados a una actividad
 router.get(
   "/activities/:activityId/files",

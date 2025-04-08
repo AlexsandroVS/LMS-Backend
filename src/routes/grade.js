@@ -2,11 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { protect, restrictTo } = require("../middlewares/auth");
 const {
-  gradeSubmission,
-  getAverages,
-  updateActivityGrade,
-  gradeUserActivity,
-  getActivityGrade,
+  gradeSubmission, getAverages, updateActivityGrade, gradeUserActivity, getActivityGrade,
 } = require("../controllers/gradeController");
 
 // routes/grade.js
@@ -20,10 +16,9 @@ router.get(
 router.put(
   "/user/:userId/activity/:activityId", 
   protect, // Middleware de protección (verifica que el usuario esté autenticado)
-  restrictTo("admin", "teacher"), // Solo los admin y teachers pueden actualizar la calificación
+  restrictTo("admin", "teacher"), // Solo los admin pueden actualizar la calificación
   updateActivityGrade // Función que actualiza la calificación
 );
-
 
 router.post("/:fileId", protect, restrictTo("admin"), gradeSubmission);
 router.post(

@@ -26,6 +26,9 @@ exports.login = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({ error: "Usuario no encontrado" });
     }
+    console.log("Buscando usuario con:", email);
+    console.log("Resultado de getByEmail:", user);
+
 
     const isMatch = await bcrypt.compare(password, user.Password);
     if (!isMatch) {

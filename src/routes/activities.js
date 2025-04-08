@@ -16,12 +16,10 @@ const storage = multer.diskStorage({
 
     // Crear la ruta para la subcarpeta dentro del directorio "documents"
     const dirPath = path.join(__dirname, "..", "..", "documents", subFolder);
-
     // Si la carpeta no existe, la creamos
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true });
     }
-
     // Indicamos que los archivos se guardarán en la carpeta correspondiente
     cb(null, dirPath);
   },

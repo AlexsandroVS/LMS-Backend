@@ -31,6 +31,7 @@ app.use("/api", require("./routes/activities"));
 app.use("/api/grades", require("./routes/grade"));
 app.use("/api", require("./routes/filesRoutes"));
 app.use("/api", require("./routes/progress"));
+app.use("/documents", express.static(path.join(__dirname, "..", "documents")));
 
 // Manejador de errores
 app.use((err, req, res, next) => {

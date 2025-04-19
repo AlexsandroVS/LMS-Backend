@@ -104,7 +104,28 @@ const User = {
   async delete(id) {
     const conn = await pool.getConnection();
     try {
-      await conn.query("DELETE FROM Users WHERE UserID = ?", [id]);
+      // 1. Anonimizar datos personales
+      await conn.query(
+        `UPDATE Users 
+         SET 
+           Name = 'Usuario eliminado',
+           Email = CONCAT('deleted_', UserID, '@example.com'),
+           Avatar = NULL,
+           isActive = 0,
+           Password = ''
+         WHERE UserID = ?`,
+        [id]
+      );
+      
+      // 2. Opcional: Registrar fecha de eliminación
+      await conn.query(
+        `ALTER TABLE Users ADD COLUMN IF NOT EXISTS DeletedAt DATETIME`
+      );
+      await conn.query(
+        `UPDATE Users SET DeletedAt = NOW() WHERE UserID = ?`,
+        [id]
+      );
+      
       return true;
     } finally {
       conn.release();

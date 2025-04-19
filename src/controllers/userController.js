@@ -79,7 +79,11 @@ exports.updateUser = async (req, res, next) => {
 exports.deleteUser = async (req, res, next) => {
   try {
     await User.delete(req.params.id);
-    res.json({ message: 'Usuario eliminado exitosamente' });
+    
+    res.json({ 
+      message: 'Usuario anonimizado exitosamente',
+      action: 'anonymized'
+    });
   } catch (error) {
     next(error);
   }

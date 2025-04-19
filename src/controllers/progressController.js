@@ -1,5 +1,6 @@
 const UserProgress = require("../models/UserProgress");
 const ProgressSummary = require("../models/ProgressSummary");
+const pool = require("../config/db");
 
 exports.getFullProgress = async (req, res) => {
   try {
@@ -19,6 +20,25 @@ exports.getFullProgress = async (req, res) => {
     next(error);
   }
 };
+exports.getUserCoursesWithProgress = async (req, res, next) => {
+  const userId = req.params.userId;
+
+  try {
+    const conn = await pool.getConnection();
+
+    const [rows] = await conn.query(
+      `SELECT * FROM UserProgress WHERE UserID = ?`,
+      [userId]
+    );
+
+    conn.release();
+    res.status(200).json(rows);
+  } catch (err) {
+    next(err);
+  }
+};
+
+
 
 exports.getCourseSummary = async (req, res) => {
   try {

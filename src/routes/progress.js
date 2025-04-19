@@ -6,25 +6,25 @@ const {
   getUserProgress,
   getFullProgress,
   getCourseSummary,
-  listEnrollments
+  listEnrollments,
+  getUserCoursesWithProgress
 } = require("../controllers/progressController");
 
-// Todas las rutas protegidas
+// ❗Esta ruta NO requiere protección
+router.get("/:userId", getUserCoursesWithProgress);
+
+// Aplicar protección para el resto
 router.use(protect);
 
-// Progreso de usuario
+// Estas sí están protegidas
+router.get("/:userId/course/:courseId/full", getFullProgress);
+router.get("/:userId/course/:courseId/summary", getCourseSummary);
+router.get("/:userId/course/:courseId", getUserProgress);
 router.post(
   "/:userId/course/:courseId/module/:moduleId/activity/:activityId",
   restrictTo("admin", "teacher"),
   createOrUpdateProgress
 );
-router.get("/:userId/course/:courseId/full", protect, getFullProgress);
-
-router.get("/:userId/course/:courseId/summary", protect, getCourseSummary);
-
-router.get("/:userId/course/:courseId", getUserProgress);
-
-// Inscripciones (solo admin)
 router.get("/enrollments", restrictTo("admin"), listEnrollments);
 
 module.exports = router;

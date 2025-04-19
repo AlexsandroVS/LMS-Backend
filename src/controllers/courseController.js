@@ -1,11 +1,9 @@
 const Course = require('../models/Course');
+const path = require("path");
 
-// Controlador getAllCourses
 exports.getAllCourses = async (req, res, next) => {
   try {
     const dbCourses = await Course.getAll();
-
-    // Verifica que dbCourses[0] contiene los datos
     const courses = dbCourses[0].map((c) => ({
       id: c.CourseID,
       title: c.Title,
@@ -15,9 +13,10 @@ exports.getAllCourses = async (req, res, next) => {
       durationHours: c.DurationHours,
       createdBy: c.CreatedBy,
       createdByName: c.CreatedByName,
-      color: c.Color || "#48CAE4", // Se asegura de que siempre haya un color
+      color: c.Color || "#48CAE4",
+      image: c.Image,
+      category: c.Category,
     }));
-
     res.json(courses);
   } catch (error) {
     next(error);
@@ -28,8 +27,6 @@ exports.getCourseById = async (req, res, next) => {
   try {
     const course = await Course.getById(req.params.id);
     if (!course) return res.status(404).json({ error: 'Curso no encontrado' });
-
-    // Mapeo del curso para devolver todos los datos
     const mappedCourse = {
       id: course.CourseID,
       title: course.Title,
@@ -39,24 +36,25 @@ exports.getCourseById = async (req, res, next) => {
       durationHours: course.DurationHours,
       createdBy: course.CreatedBy,
       createdByName: course.CreatedByName,
-      color: course.Color || "#48CAE4", // Si no tiene color, usamos un valor por defecto
-      createdAt: course.CreatedAt, // Agregar fecha de creación si la necesitas
+      color: course.Color || "#48CAE4",
+      createdAt: course.CreatedAt,
+      image: course.Image,
+      category: course.Category,
     };
-
-    res.json(mappedCourse); // Devolver todo el objeto del curso mapeado
+    res.json(mappedCourse);
   } catch (error) {
     next(error);
   }
 };
 
-
 exports.createCourse = async (req, res, next) => {
   try {
-    const courseId = await Course.create(req.body);
-
-    // Convertir a número si es BigInt
+    const data = JSON.parse(req.body.data || "{}");
+    if (req.file) {
+      data.image = `/uploads/${req.file.filename}`;
+    }
+    const courseId = await Course.create(data);
     const numericId = typeof courseId === "bigint" ? Number(courseId) : courseId;
-
     res.status(201).json({ id: numericId, message: "Curso creado exitosamente" });
   } catch (error) {
     console.error("Error en createCourse:", error);
@@ -66,10 +64,12 @@ exports.createCourse = async (req, res, next) => {
 
 exports.updateCourse = async (req, res, next) => {
   try {
-    if (Object.keys(req.body).length === 0) {
-      return res.status(400).json({ error: 'Debe proporcionar al menos un campo para actualizar' });
+    const courseId = req.params.id;
+    const data = req.body.data ? JSON.parse(req.body.data) : req.body;
+    if (req.file) {
+      data.image = `/uploads/${req.file.filename}`;
     }
-    await Course.update(req.params.id, req.body);
+    await Course.update(courseId, data);
     res.json({ message: 'Curso actualizado exitosamente' });
   } catch (error) {
     next(error);

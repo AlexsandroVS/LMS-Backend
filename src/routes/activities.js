@@ -35,6 +35,7 @@ const upload = multer({
     const allowedTypes = [
       "application/pdf",
       "application/msword",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "image/jpeg",
       "image/png",
@@ -98,7 +99,19 @@ router.post(
   },
   activitiesController.createActivity
 );
-
+router.post(
+  "/activities/:activityId/files",
+  protect,
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      await filesController.uploadFile(req, res);
+    } catch (error) {
+      console.error("❌ Error subiendo archivo:", error);
+      res.status(500).json({ error: "Error subiendo archivo" });
+    }
+  }
+);
 // Actualizar una actividad
 router.put("/activities/:id", activitiesController.updateActivity);
 

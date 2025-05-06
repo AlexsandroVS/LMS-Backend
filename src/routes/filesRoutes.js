@@ -63,5 +63,7 @@ router.get(
 router.get("/files/:id", filesController.getFileById);
 // Eliminar un archivo
 router.delete("/files/:id", protect, filesController.deleteFile);
+router.patch("/files/:id/feedback", filesController.addFeedback);
+router.patch("/files/:id/score", filesController.updateScore);
 
 module.exports = router;

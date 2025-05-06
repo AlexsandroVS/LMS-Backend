@@ -2,58 +2,126 @@ const File = require("../models/Files");
 const fs = require("fs");
 const pool = require("../config/db");
 const path = require("path");
+const libre = require('libreoffice-convert');
 
 exports.uploadFile = async (req, res) => {
-  const { activityId, courseId } = req.params;
-  const file = req.file;
-
-  if (!file) {
-    return res.status(400).json({ error: "No se ha cargado ningún archivo." });
-  }
-
   try {
-    // Verifica que el archivo se esté recibiendo correctamente
-    console.log("Archivo recibido:", file.originalname, file.size, file.mimetype);
+    if (!req.file) {
+      return res.status(400).json({ message: 'No se subió ningún archivo.' });
+    }
 
-    // Crear la ruta para guardar el archivo
-    const courseName = await getCourseName(courseId); // Función que obtiene el nombre del curso
-    const subFolder = courseName.split(" ")[0]; // Usamos la primera palabra del nombre del curso como subcarpeta
-    const dirPath = path.join(__dirname, "..", "..", "documents", subFolder);
+    const { activityId } = req.params;
+    const conn = await pool.getConnection();
 
-    // Verificamos si la carpeta existe, si no, la creamos
+    try {
+      // 1. Obtener CourseID y MaxAttempts
+      const [activityData] = await conn.query(
+        `SELECT m.CourseID, a.MaxAttempts
+         FROM Activities a
+         JOIN Modules m ON a.ModuleID = m.ModuleID
+         WHERE a.ActivityID = ?`,
+        [activityId]
+      );
+
+      if (!activityData.length) {
+        return res.status(400).json({ message: 'Actividad no encontrada.' });
+      }
+
+      const courseId = activityData[0].CourseID;
+      const maxAttempts = activityData[0].MaxAttempts || 1;
+
+      // 2. Verificar cuántos archivos ha subido el usuario
+      const [attempts] = await conn.query(
+        `SELECT COUNT(*) AS total FROM Files WHERE UserID = ? AND ActivityID = ?`,
+        [req.user.id, activityId]
+      );
+
+      if (attempts[0].total >= maxAttempts) {
+        return res.status(403).json({
+          message: `Has alcanzado el máximo de ${maxAttempts} intentos para esta actividad.`,
+        });
+      }
+
+      // 3. Obtener ruta real del curso (subcarpeta en documents)
+      const uploadDir = await getDocumentUploadPath(courseId);
+      const { filename, mimetype } = req.file;
+      let finalFilename = filename;
+      let finalMimetype = mimetype;
+      const originalPath = path.join(uploadDir, filename);
+
+      // 4. Conversión si es Word/PPT
+      if (
+        mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        mimetype === 'application/msword' ||
+        mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+        mimetype === 'application/vnd.ms-powerpoint'
+      ) {
+        const outputPath = originalPath.replace(path.extname(originalPath), '.pdf');
+        try {
+          const fileBuffer = fs.readFileSync(originalPath);
+          const pdfBuffer = await new Promise((resolve, reject) => {
+            libre.convert(fileBuffer, '.pdf', undefined, (err, done) => {
+              if (err) reject(err);
+              else resolve(done);
+            });
+          });
+
+          fs.writeFileSync(outputPath, pdfBuffer);
+          fs.unlinkSync(originalPath); // eliminar original
+          finalFilename = path.basename(outputPath);
+          finalMimetype = 'application/pdf';
+        } catch (error) {
+          console.error('Error convirtiendo archivo:', error);
+          return res.status(500).json({ message: 'Error al convertir archivo a PDF.' });
+        }
+      }
+
+      // 5. Guardar archivo en base de datos con ruta completa
+      const newFile = await File.create({
+        ActivityID: activityId,
+        UserID: req.user.id,
+        CourseID: courseId,
+        FileName: finalFilename,
+        FileType: finalMimetype,
+        Files: `documents/${path.basename(uploadDir)}/${finalFilename}`,
+        UploadedAt: new Date(),
+      });
+
+      res.status(201).json(newFile);
+
+    } finally {
+      conn.release();
+    }
+
+  } catch (error) {
+    console.error('Error al subir archivo:', error);
+    res.status(500).json({ message: 'Error interno al subir archivo.' });
+  }
+};
+
+
+async function getDocumentUploadPath(courseId) {
+  const conn = await pool.getConnection();
+  try {
+    const [rows] = await conn.query(
+      `SELECT Title FROM Courses WHERE CourseID = ?`, [courseId]
+    );
+    const courseName = rows.length > 0 ? rows[0].Title : "Curso";
+    const subFolder = courseName.split(" ")[0].replace(/[^a-zA-Z0-9]/g, ""); // sanitizar
+    const dirPath = path.join(__dirname, '..', '..', 'documents', subFolder);
+
+    // Asegúrate de que exista
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true });
     }
 
-    // Definir la ruta del archivo
-    const filePath = path.join(dirPath, file.filename); // Usamos file.filename en lugar de file.originalname
-
-    // Mover el archivo desde la ubicación temporal a la carpeta de destino
-    fs.renameSync(file.path, filePath);
-
-    // Guardamos solo la ruta relativa del archivo en la base de datos
-    const relativeFilePath = path.join("documents", subFolder, file.filename);
-
-    // Preparar los datos del archivo
-    const fileData = {
-      ActivityID: activityId,
-      UserID: req.user.id,
-      CourseID: courseId,
-      FileName: file.originalname,
-      FileType: file.mimetype,
-      Files: relativeFilePath, // Guardamos la ruta relativa
-      UploadedAt: new Date(),
-    };
-
-    // Insertamos la información del archivo en la base de datos
-    const fileId = await File.create(fileData);
-    
-    res.status(201).json({ message: "Archivo cargado con éxito", fileId });
-  } catch (error) {
-    console.error("❌ Error al cargar archivo:", error);
-    res.status(500).json({ message: "Error interno del servidor" });
+    return dirPath;
+  } finally {
+    conn.release();
   }
-};
+}
+
+
 exports.getFileById = async (req, res) => {
   const { id } = req.params;
   try {
@@ -130,6 +198,54 @@ exports.deleteFile = async (req, res) => {
   } catch (error) {
     console.error("Error al eliminar archivo:", error);
     res.status(500).json({ message: "Error interno del servidor" });
+  }
+};
+
+exports.addFeedback = async (req, res) => {
+  const { id } = req.params;
+  const { feedback } = req.body;
+
+  try {
+    if (!feedback || feedback.trim() === "") {
+      return res.status(400).json({ message: "La retroalimentación no puede estar vacía." });
+    }
+
+    const success = await File.addFeedback(id, feedback);
+    if (!success) {
+      return res.status(404).json({ message: "Archivo no encontrado o no se pudo actualizar." });
+    }
+
+    res.status(200).json({ message: "Retroalimentación agregada correctamente." });
+  } catch (error) {
+    console.error("❌ Error al agregar feedback:", error);
+    res.status(500).json({ message: "Error interno del servidor." });
+  }
+};
+
+exports.updateScore = async (req, res) => {
+  const { id } = req.params;
+  const { score } = req.body;
+
+  if (score === undefined || isNaN(score)) {
+    return res.status(400).json({ message: "Calificación inválida." });
+  }
+
+  try {
+    const conn = await pool.getConnection();
+    const [result] = await conn.query(
+      `UPDATE Files SET Score = ? WHERE FileID = ?`,
+      [score, id]
+    );
+    conn.release();
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Archivo no encontrado." });
+    }
+
+    res.status(200).json({ message: "Calificación actualizada en archivo." });
+  } catch (error) {
+    console.error("Error al actualizar calificación:", error);
+    res.status(500).json({ message: "Error interno del servidor." });
   }
 };
 

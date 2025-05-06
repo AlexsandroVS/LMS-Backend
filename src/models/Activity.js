@@ -32,13 +32,14 @@ const Activity = {
     const conn = await pool.getConnection();
     try {
       const [result] = await conn.query(
-        "INSERT INTO Activities (ModuleID, Title, Content, Type, Deadline) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO Activities (ModuleID, Title, Content, Type, Deadline, MaxAttempts) VALUES (?, ?, ?, ?, ?, ?)",
         [
           activityData.ModuleID,
           activityData.Title,
           activityData.Content,
           activityData.Type,
           activityData.Deadline,
+          activityData.MaxAttempts || 1,
         ]
       );
       return result.insertId; // Retorna el ID de la actividad creada
@@ -52,37 +53,41 @@ const Activity = {
     try {
       const updates = [];
       const params = [];
-  
+
       // Mapeo de los campos que se pueden actualizar
       const fieldMap = {
         title: "Title",
         content: "Content",
         type: "Type",
         deadline: "Deadline",
+        maxAttempts: "MaxAttempts", 
       };
-  
+      
+
       // Preparar la consulta SQL para los campos que se deben actualizar
       Object.entries(fieldMap).forEach(([key, dbField]) => {
         if (activityData[key] !== undefined) {
           updates.push(`${dbField} = ?`);
           const value =
-            key === "deadline" && activityData[key] === "" ? null : activityData[key];
+            key === "deadline" && activityData[key] === ""
+              ? null
+              : activityData[key];
           params.push(value);
         }
       });
-  
+
       // Si no se proporcionan campos para actualizar, lanzamos un error
       if (updates.length === 0) {
         throw new Error("No se proporcionaron campos válidos para actualizar");
       }
-  
+
       // Construir la consulta SQL
       const sql = `
         UPDATE Activities
         SET ${updates.join(", ")}
         WHERE ActivityID = ?
       `;
-  
+
       // Ejecutar la consulta
       await conn.query(sql, [...params, id]);
       return true; // Retornar que la actualización fue exitosa
@@ -90,7 +95,7 @@ const Activity = {
       conn.release(); // Liberar la conexión
     }
   },
-  
+
   // En el modelo Activity.js
   async delete(id) {
     const conn = await pool.getConnection();

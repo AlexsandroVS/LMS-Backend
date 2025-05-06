@@ -1,7 +1,8 @@
 const pool = require("../config/db");
 const allowedTypes = [
-  "application/pdf",  // PDF
-  "application/msword",  // Word (.doc)
+  "application/pdf", // PDF
+  "application/msword", // Word (.doc)
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // Word (.docx)
   "image/jpeg", // JPEG
   "image/png", // PNG
@@ -20,16 +21,17 @@ const File = {
     const conn = await pool.getConnection();
     try {
       const [result] = await conn.query(
-        `INSERT INTO Files (ActivityID, UserID,CourseID ,FileName, FileType, Files, UploadedAt) 
-         VALUES (?, ?, ?, ?, ?, ? ,?)`,
+        `INSERT INTO Files (ActivityID, UserID, CourseID, FileName, FileType, Files, UploadedAt, Feedback) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           fileData.ActivityID,
           fileData.UserID,
           fileData.CourseID,
           fileData.FileName,
           fileData.FileType,
-          fileData.Files, // 
+          fileData.Files,
           fileData.UploadedAt,
+          fileData.Feedback || null,
         ]
       );
       return result.insertId;
@@ -40,6 +42,7 @@ const File = {
       conn.release();
     }
   },
+
   async getById(fileId) {
     const conn = await pool.getConnection();
     try {
@@ -85,6 +88,25 @@ const File = {
         [activityId, userId]
       );
       return rows;
+    } finally {
+      conn.release();
+    }
+  },
+  async addFeedback(fileId, feedback) {
+    if (!feedback || feedback.trim() === "") {
+      throw new Error("La retroalimentación no puede estar vacía.");
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      const [result] = await conn.query(
+        `UPDATE Files SET Feedback = ? WHERE FileID = ?`,
+        [feedback, fileId]
+      );
+      return result.affectedRows > 0;
+    } catch (error) {
+      console.error("Error al actualizar feedback:", error);
+      throw error;
     } finally {
       conn.release();
     }

@@ -8,7 +8,7 @@ const app = express();
 // Habilitar CORS
 app.use(cors({
     origin: "http://localhost:5173",
-    methods: "GET,POST,PUT,DELETE",
+    methods: "GET,POST,PUT,DELETE, PATCH",
     allowedHeaders: "Content-Type,Authorization"
 }));
 
@@ -21,7 +21,9 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // Configurar Multer para guardar archivos en "uploads"
 const storage = multer.diskStorage({ /* ... */ });
 const upload = multer({ storage });
+const statisticsRoutes = require('./routes/statisticsRoutes');
 
+app.use('/api/stats', statisticsRoutes);
 // Rutas
 app.use("/api/users", require("./routes/users"));
 app.use("/api/courses", require("./routes/courses"));

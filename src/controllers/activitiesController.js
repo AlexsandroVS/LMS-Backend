@@ -4,6 +4,7 @@ const multer = require("multer");
 const storage = multer.memoryStorage();
 const pool = require("../config/db");
 const path = require("path");
+const libre = require('libreoffice-convert');
 const fs = require("fs");
 const upload = multer({ storage: storage });
 
@@ -62,91 +63,87 @@ exports.createActivity = async (req, res) => {
   const file = req.file;
 
   try {
-    // Validar datos requeridos
     if (!moduleId || !title || !content) {
-      return res.status(400).json({
-        message: "Datos incompletos",
-        required: {
-          moduleId: !moduleId ? "falta" : "ok",
-          title: !title ? "falta" : "ok",
-          content: !content ? "falta" : "ok"
-        }
-      });
+      return res.status(400).json({ message: "Datos incompletos" });
     }
-
-    // Validar archivo
     if (!file) {
-      return res.status(400).json({
-        message: "Se requiere un archivo válido",
-        received: "ningún archivo"
-      });
+      return res.status(400).json({ message: "Se requiere un archivo válido" });
     }
 
-    // Crear actividad
     const activityData = {
       ModuleID: moduleId,
       Title: title,
       Content: content,
       Type: type,
       Deadline: deadline || null,
+      MaxAttempts: req.body.maxAttempts || 1
     };
+    
 
-    let activityId;
-    try {
-      activityId = await Activity.create(activityData);
-      console.log("Actividad creada con ID:", activityId);
-    } catch (error) {
-      console.error("Error al crear actividad:", error);
-      return res.status(500).json({
-        message: "Error al crear la actividad",
-        error: error.message
-      });
+    const activityId = await Activity.create(activityData);
+    console.log("Actividad creada con ID:", activityId);
+
+    const courseName = await getCourseName(courseId);
+    const subFolder = courseName.split(' ')[0];
+    const dirPath = path.join('documents', subFolder);
+    const inputPath = path.join(dirPath, file.filename);
+
+    let finalFilename = file.filename;
+    let finalMimetype = file.mimetype;
+
+    // ➡ Aquí hacemos la conversión
+    if (
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      file.mimetype === 'application/msword' ||
+      file.mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+      file.mimetype === 'application/vnd.ms-powerpoint'
+    ) {
+      const outputPath = inputPath.replace(path.extname(inputPath), '.pdf');
+      try {
+        const fileBuffer = fs.readFileSync(inputPath);
+
+        const pdfBuffer = await new Promise((resolve, reject) => {
+          libre.convert(fileBuffer, '.pdf', undefined, (err, done) => {
+            if (err) reject(err);
+            else resolve(done);
+          });
+        });
+
+        fs.writeFileSync(outputPath, pdfBuffer);
+        fs.unlinkSync(inputPath); // Eliminamos el archivo original
+
+        finalFilename = path.basename(outputPath);
+        finalMimetype = 'application/pdf';
+      } catch (error) {
+        console.error('Error convirtiendo archivo a PDF:', error);
+        return res.status(500).json({ message: 'Error al convertir el archivo.' });
+      }
     }
 
-    // Obtener el nombre del curso y crear la subcarpeta
-    const courseName = await getCourseName(courseId);
-    const subFolder = courseName.split(' ')[0]; // Primera palabra del nombre del curso
-    const dirPath = path.join('documents', subFolder); // Ruta relativa
+    const relativeFilePath = path.join(dirPath, finalFilename);
 
-    // Guardar solo la ruta relativa en la base de datos
-    const relativeFilePath = path.join(dirPath, file.filename); // Ruta relativa al archivo
-
-    // Preparar los datos del archivo
     const fileData = {
       ActivityID: activityId,
       UserID: req.user.id,
       CourseID: courseId,
       FileName: file.originalname,
-      FileType: file.mimetype,
-      Files: relativeFilePath, // Guardamos la ruta relativa
+      FileType: finalMimetype,
+      Files: relativeFilePath,
       UploadedAt: new Date(),
     };
 
-    try {
-      const fileId = await File.create(fileData);
-      console.log("Archivo creado con ID:", fileId);
-    } catch (error) {
-      console.error("Error al crear archivo:", error);
-      return res.status(500).json({
-        message: "Error al crear el archivo",
-        error: error.message
-      });
-    }
+    const fileId = await File.create(fileData);
+    console.log("Archivo creado con ID:", fileId);
 
-    // Respuesta exitosa
     res.status(201).json({
       message: "Actividad y archivo creados exitosamente",
       activity: { id: activityId, title },
-      file: { name: file.originalname, type: file.mimetype, size: file.size }
+      file: { name: file.originalname, type: finalMimetype }
     });
 
   } catch (error) {
-    console.error("❌ Error en el proceso:", error);
-    res.status(500).json({
-      message: "Error interno del servidor",
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
+    console.error("❌ Error en createActivity:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
   }
 };
 exports.updateActivity = async (req, res) => {
@@ -174,36 +171,30 @@ exports.updateActivity = async (req, res) => {
 
 exports.deleteActivity = async (req, res) => {
   const { id } = req.params;
-
   try {
-    // Paso 1: Eliminar los archivos asociados con esta actividad
-    const files = await File.getByActivityId(id);
-    if (files.length > 0) {
-      // Si hay archivos, eliminamos todos
-      for (const file of files) {
-        const filePath = file.Files; // Ruta del archivo
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath); // Eliminar el archivo físicamente
-        }
-        // Eliminar el archivo de la base de datos
-        await File.delete(file.FileID);
-        console.log(`Archivo con ID ${file.FileID} eliminado.`);
-      }
+    const conn = await pool.getConnection();
+
+    try {
+      await conn.beginTransaction();
+
+      // Primero eliminar registros dependientes
+      await conn.query('DELETE FROM activitygrades WHERE ActivityID = ?', [id]);
+      await conn.query('DELETE FROM userprogress WHERE ActivityID = ?', [id]);
+      await conn.query('DELETE FROM Files WHERE ActivityID = ?', [id]);
+      await conn.query('DELETE FROM Activities WHERE ActivityID = ?', [id]);
+
+      await conn.commit();
+      res.json({ message: 'Actividad eliminada exitosamente' });
+
+    } catch (error) {
+      await conn.rollback();
+      throw error;
+    } finally {
+      conn.release();
     }
-
-    // Paso 2: Eliminar la actividad
-    const result = await Activity.delete(id);
-
-    if (result) {
-      return res.json({ message: "Actividad y archivos eliminados correctamente." });
-    } else {
-      // Si la actividad no fue eliminada, respondemos con un error de no encontrada
-      return res.status(404).json({ message: "Actividad no encontrada." });
-    }
-
   } catch (error) {
-    console.error("❌ Error al eliminar actividad:", error);
-    return res.status(500).json({ message: "Error interno del servidor." });
+    console.error('❌ Error al eliminar actividad:', error);
+    res.status(500).json({ message: 'Error al eliminar actividad' });
   }
 };
 

@@ -1,52 +1,49 @@
 const Course = require('../models/Course');
-const path = require("path");
+const pool = require("../config/db");
 
+// 🔄 Utilidad para mapear cursos
+const mapCourse = (c) => ({
+  id: c.CourseID,
+  title: c.Title,
+  description: c.Description,
+  icon: c.Icon,
+  status: c.Status,
+  durationHours: c.DurationHours,
+  createdBy: c.CreatedBy,
+  createdByName: c.CreatedByName,
+  color: c.Color || "#48CAE4",
+  image: c.Image,
+  category: c.Category,
+  createdAt: c.CreatedAt || null,
+});
+
+/* --------------------- Obtener todos o buscar --------------------- */
 exports.getAllCourses = async (req, res, next) => {
   try {
-    const dbCourses = await Course.getAll();
-    const courses = dbCourses[0].map((c) => ({
-      id: c.CourseID,
-      title: c.Title,
-      description: c.Description,
-      icon: c.Icon,
-      status: c.Status,
-      durationHours: c.DurationHours,
-      createdBy: c.CreatedBy,
-      createdByName: c.CreatedByName,
-      color: c.Color || "#48CAE4",
-      image: c.Image,
-      category: c.Category,
-    }));
+    const searchQuery = req.query.search;
+    const dbCourses = searchQuery
+      ? await Course.search(searchQuery)
+      : await Course.getAll();
+
+    const courses = dbCourses[0].map(mapCourse);
     res.json(courses);
   } catch (error) {
     next(error);
   }
 };
 
+/* --------------------- Obtener uno por ID --------------------- */
 exports.getCourseById = async (req, res, next) => {
   try {
     const course = await Course.getById(req.params.id);
     if (!course) return res.status(404).json({ error: 'Curso no encontrado' });
-    const mappedCourse = {
-      id: course.CourseID,
-      title: course.Title,
-      description: course.Description,
-      icon: course.Icon,
-      status: course.Status,
-      durationHours: course.DurationHours,
-      createdBy: course.CreatedBy,
-      createdByName: course.CreatedByName,
-      color: course.Color || "#48CAE4",
-      createdAt: course.CreatedAt,
-      image: course.Image,
-      category: course.Category,
-    };
-    res.json(mappedCourse);
+    res.json(mapCourse(course));
   } catch (error) {
     next(error);
   }
 };
 
+/* --------------------- Crear curso --------------------- */
 exports.createCourse = async (req, res, next) => {
   try {
     const data = JSON.parse(req.body.data || "{}");
@@ -62,6 +59,7 @@ exports.createCourse = async (req, res, next) => {
   }
 };
 
+/* --------------------- Actualizar curso --------------------- */
 exports.updateCourse = async (req, res, next) => {
   try {
     const courseId = req.params.id;
@@ -76,10 +74,63 @@ exports.updateCourse = async (req, res, next) => {
   }
 };
 
+/* --------------------- Eliminar curso --------------------- */
 exports.deleteCourse = async (req, res, next) => {
   try {
-    await Course.delete(req.params.id);
-    res.json({ message: 'Curso eliminado exitosamente' });
+    const deleted = await Course.delete(req.params.id);
+    if (deleted) {
+      res.status(200).json({ message: "Curso eliminado exitosamente" });
+    } else {
+      res.status(404).json({ message: "Curso no encontrado" });
+    }
+  } catch (error) {
+    console.error("Error al eliminar curso:", error);
+    res.status(500).json({ message: "Error interno al eliminar el curso" });
+  }
+};
+
+/* --------------------- Sugerencias de búsqueda --------------------- */
+exports.getSearchSuggestions = async (req, res, next) => {
+  try {
+    const { query } = req.query;
+    const likeQuery = `%${query}%`;
+
+    const [courses] = await pool.query(`
+      SELECT 
+        CourseID as id, 
+        Title as title, 
+        Image as image, 
+        Category as category,
+        'course' as type
+      FROM Courses
+      WHERE Title LIKE ? OR Description LIKE ? OR Category LIKE ?
+      ORDER BY Title
+      LIMIT 5
+    `, [likeQuery, likeQuery, likeQuery]);
+
+    const suggestedTerms = [
+      { type: 'term', value: `${query} básico` },
+      { type: 'term', value: `${query} avanzado` },
+      { type: 'term', value: `Introducción a ${query}` },
+      { type: 'term', value: `Curso completo de ${query}` }
+    ];
+
+    res.json([...courses, ...suggestedTerms]);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/* --------------------- Búsquedas relacionadas --------------------- */
+exports.getRelatedSearches = async (req, res, next) => {
+  try {
+    const { query } = req.query;
+    const related = [
+      `${query} para principiantes`,
+      `Curso completo de ${query}`,
+      `Aprender ${query} rápido`,
+    ];
+    res.json(related);
   } catch (error) {
     next(error);
   }

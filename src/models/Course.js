@@ -14,6 +14,23 @@ const Course = {
       conn.release();
     }
   },
+   async search(searchTerm) {
+    const conn = await pool.getConnection();
+    try {
+      const searchParam = `%${searchTerm}%`;
+      return await conn.query(`
+        SELECT c.CourseID, c.Title, c.Description, c.Icon, c.Status, c.DurationHours,
+               c.CreatedBy, c.Color, c.Image, c.Category,
+               u.Name as CreatedByName
+        FROM Courses c
+        JOIN Users u ON c.CreatedBy = u.UserID
+        WHERE c.Title LIKE ? OR c.Description LIKE ? OR c.Category LIKE ?
+      `, [searchParam, searchParam, searchParam]);
+    } finally {
+      conn.release();
+    }
+  },
+
 
   async getById(id) {
     const conn = await pool.getConnection();
@@ -94,11 +111,17 @@ const Course = {
     }
   },
 
-  async delete(id) {
+ async delete(id) {
     const conn = await pool.getConnection();
     try {
+      await conn.beginTransaction();
       await conn.query("DELETE FROM Courses WHERE CourseID = ?", [id]);
+
+      await conn.commit();
       return true;
+    } catch (error) {
+      await conn.rollback();
+      throw error;
     } finally {
       conn.release();
     }

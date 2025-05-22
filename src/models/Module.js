@@ -10,7 +10,7 @@ const Module = {
       const params = [courseId];
 
       if (!isAdmin) {
-        query += ` AND IsLocked = 0`; // Filtrar los módulos bloqueados si no es admin
+        query += ` AND IsLocked = 0`; 
       }
 
       query += ` ORDER BY ModuleOrder ASC`;

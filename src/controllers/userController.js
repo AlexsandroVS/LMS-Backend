@@ -56,6 +56,11 @@ exports.updateUser = async (req, res, next) => {
       updatedFields.avatar = `/uploads/${req.file.filename}`;
     }
 
+    if (updatedFields.bio !== undefined) {
+      updatedFields.biografia = updatedFields.bio;
+    }
+    
+
     await User.update(userId, updatedFields);
     const updatedUser = await User.getById(userId);
 
@@ -66,14 +71,15 @@ exports.updateUser = async (req, res, next) => {
         name: updatedUser.Name,
         email: updatedUser.Email,
         role: updatedUser.Role,
-        avatar: updatedUser.Avatar, 
+        avatar: updatedUser.Avatar,
+        bio: updatedUser.Biografia, 
         lastLogin: updatedUser.LastLogin,
       }
     });
   } catch (error) {
     next(error);
   }
-};
+};  
 
 exports.deleteUser = async (req, res, next) => {
   try {

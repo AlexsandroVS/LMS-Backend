@@ -26,9 +26,6 @@ exports.login = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({ error: "Usuario no encontrado" });
     }
-    console.log("Buscando usuario con:", email);
-    console.log("Resultado de getByEmail:", user);
-
 
     const isMatch = await bcrypt.compare(password, user.Password);
     if (!isMatch) {
@@ -66,13 +63,6 @@ exports.register = async (req, res, next) => {
       return res.status(400).json({ error: "La contraseña es obligatoria" });
     }
 
-    console.log("🔹 Contraseña recibida en register:", req.body.password);
-    let hashedPassword = req.body.password;
-    if (!hashedPassword.startsWith("$2b$10$")) {
-      hashedPassword = await User.hashPassword(req.body.password);
-    }
-    console.log("🔹 Hash generado en register:", hashedPassword);
-
     const userData = {
       ...req.body,
       password: hashedPassword,
@@ -80,9 +70,6 @@ exports.register = async (req, res, next) => {
 
     const userId = await User.create(userData);
     const user = await User.getById(userId);
-
-    console.log("✅ Usuario registrado correctamente en la BD:", user);
-    const token = generateToken(user);
 
     res.status(201).json({
       token,
@@ -99,20 +86,17 @@ exports.register = async (req, res, next) => {
     next(error);
   }
 };
-
 exports.getMe = async (req, res, next) => {
   try {
-    const token = req.headers.authorization?.split(" ")[1]; // Obtener el token del header
+    const token = req.headers.authorization?.split(" ")[1];
     if (!token) {
       return res.status(401).json({ error: "Token no proporcionado" });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET); // Decodificar el token
-
-    // Verificar que el correo esté presente en el token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const emailFromToken = decoded.email;
-    // Usar el email del token para obtener el usuario
-    const user = await User.getByEmail(emailFromToken); // Buscar por email en lugar de name
+
+    const user = await User.getByEmail(emailFromToken);
 
     if (!user) {
       return res.status(404).json({ error: "Usuario no encontrado" });
@@ -125,6 +109,7 @@ exports.getMe = async (req, res, next) => {
         email: user.Email,
         role: user.Role,
         avatar: user.Avatar,
+        biografia: user.Biografia || "", 
       },
     });
   } catch (error) {
@@ -132,6 +117,7 @@ exports.getMe = async (req, res, next) => {
     res.status(500).json({ error: "Error al verificar autenticación" });
   }
 };
+
 
 exports.logout = async (req, res, next) => {
   try {

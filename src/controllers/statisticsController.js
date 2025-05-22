@@ -1,19 +1,19 @@
-// controllers/statisticsController.js (actualizado con mejoras sugeridas)
 const pool = require("../config/db");
 
-// 1. Participación por curso
+// 1. Participación por curso (basado en archivos entregados)
 exports.getParticipationByCourse = async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT 
         c.Title AS Curso,
-        ROUND(COUNT(DISTINCT f.UserID) * 100 / (
+        ROUND(COUNT(DISTINCT s.UserID) * 100 / (
           SELECT COUNT(*) FROM Users WHERE Role = 'student'
         ), 2) AS ParticipacionPorcentaje
       FROM Courses c
       JOIN Modules m ON c.CourseID = m.CourseID
       JOIN Activities a ON a.ModuleID = m.ModuleID
-      LEFT JOIN Files f ON f.ActivityID = a.ActivityID
+      JOIN Submissions s ON s.ActivityID = a.ActivityID
+      WHERE s.IsFinal = 1
       GROUP BY c.CourseID;
     `);
     res.json(rows);
@@ -23,17 +23,18 @@ exports.getParticipationByCourse = async (req, res) => {
   }
 };
 
-// 2. Promedio por curso
+// 2. Promedio por curso (desde Submissions)
 exports.getAverageScoreByCourse = async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT 
         c.Title AS Curso,
-        ROUND(AVG(g.Score), 2) AS PromedioNotas
+        ROUND(AVG(s.Score), 2) AS PromedioNotas
       FROM Courses c
       JOIN Modules m ON c.CourseID = m.CourseID
       JOIN Activities a ON a.ModuleID = m.ModuleID
-      JOIN ActivityGrades g ON g.ActivityID = a.ActivityID
+      JOIN Submissions s ON s.ActivityID = a.ActivityID
+      WHERE s.IsFinal = 1 AND s.Score IS NOT NULL
       GROUP BY c.CourseID;
     `);
     res.json(rows);
@@ -47,9 +48,9 @@ exports.getAverageScoreByCourse = async (req, res) => {
 exports.getSubmissionsByStudent = async (req, res) => {
   try {
     const [rows] = await pool.query(`
-      SELECT u.Name, COUNT(f.FileID) AS Entregas
+      SELECT u.Name, COUNT(s.SubmissionID) AS Entregas
       FROM Users u
-      LEFT JOIN Files f ON f.UserID = u.UserID
+      LEFT JOIN Submissions s ON s.UserID = u.UserID
       WHERE u.Role = 'student'
       GROUP BY u.UserID
       ORDER BY Entregas DESC;
@@ -67,10 +68,10 @@ exports.getActivityCompliance = async (req, res) => {
     const [rows] = await pool.query(`
       SELECT 
         a.Title,
-        COUNT(f.FileID) AS Entregas,
-        (SELECT COUNT(*) FROM Users WHERE Role = 'student') - COUNT(f.FileID) AS Faltantes
+        COUNT(s.SubmissionID) AS Entregas,
+        (SELECT COUNT(*) FROM Users WHERE Role = 'student') - COUNT(DISTINCT s.UserID) AS Faltantes
       FROM Activities a
-      LEFT JOIN Files f ON f.ActivityID = a.ActivityID
+      LEFT JOIN Submissions s ON s.ActivityID = a.ActivityID AND s.IsFinal = 1
       GROUP BY a.ActivityID;
     `);
     res.json(rows);
@@ -80,16 +81,17 @@ exports.getActivityCompliance = async (req, res) => {
   }
 };
 
+// 5. Top 5 actividades con menor cumplimiento
 exports.getTopPendingActivities = async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT 
         a.Title,
-        COUNT(f.FileID) AS Entregas,
+        COUNT(s.SubmissionID) AS Entregas,
         (SELECT COUNT(*) FROM Users WHERE Role = 'student') AS TotalEstudiantes,
-        (SELECT COUNT(*) FROM Users WHERE Role = 'student') - COUNT(f.FileID) AS Pendientes
+        (SELECT COUNT(*) FROM Users WHERE Role = 'student') - COUNT(DISTINCT s.UserID) AS Pendientes
       FROM Activities a
-      LEFT JOIN Files f ON f.ActivityID = a.ActivityID
+      LEFT JOIN Submissions s ON s.ActivityID = a.ActivityID AND s.IsFinal = 1
       GROUP BY a.ActivityID
       ORDER BY Pendientes DESC
       LIMIT 5;
@@ -101,16 +103,16 @@ exports.getTopPendingActivities = async (req, res) => {
   }
 };
 
-// 5. Estudiantes con bajo rendimiento
+// 6. Estudiantes con bajo rendimiento (Score promedio < 11)
 exports.getLowPerformanceStudents = async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT 
         u.Name,
-        ROUND(AVG(g.Score), 2) AS Promedio
+        ROUND(AVG(s.Score), 2) AS Promedio
       FROM Users u
-      JOIN ActivityGrades g ON g.UserID = u.UserID
-      WHERE u.Role = 'student'
+      JOIN Submissions s ON s.UserID = u.UserID
+      WHERE u.Role = 'student' AND s.IsFinal = 1 AND s.Score IS NOT NULL
       GROUP BY u.UserID
       HAVING Promedio < 11;
     `);
@@ -121,14 +123,14 @@ exports.getLowPerformanceStudents = async (req, res) => {
   }
 };
 
-// 6. Promedio general del estudiante
+// 7. Promedio global de un estudiante
 exports.getGlobalAverage = async (req, res) => {
   const { userId } = req.params;
   try {
     const [[row]] = await pool.query(`
-      SELECT ROUND(AVG(Score), 2) AS PromedioGlobal
-      FROM ActivityGrades
-      WHERE UserID = ? AND Score IS NOT NULL
+      SELECT ROUND(AVG(s.Score), 2) AS PromedioGlobal
+      FROM Submissions s
+      WHERE s.UserID = ? AND s.IsFinal = 1 AND s.Score IS NOT NULL;
     `, [userId]);
 
     res.json(row);

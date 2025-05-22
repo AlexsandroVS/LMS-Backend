@@ -9,6 +9,15 @@ exports.getAllEnrollments = async (req, res, next) => {
     next(error);
   }
 };
+exports.getCoursesByStudent = async (req, res, next) => {
+  try {
+    const studentId = req.params.studentId;
+    const courseIds = await Enrollment.getCoursesByStudent(studentId);
+    res.json({ success: true, courseIds });
+  } catch (error) {
+    next(error);
+  }
+};
 
 exports.getEnrollmentById = async (req, res, next) => {
   try {

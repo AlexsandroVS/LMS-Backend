@@ -2,65 +2,193 @@ const File = require("../models/Files");
 const fs = require("fs");
 const pool = require("../config/db");
 const path = require("path");
-const libre = require('libreoffice-convert');
+const libre = require("libreoffice-convert");
 
+function sanitizeFolderName(name) {
+  return name
+    .split(" ")[0]
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase();
+}
+// Subir archivo normal (actividad sin submission)
 exports.uploadFile = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ message: 'No se subió ningún archivo.' });
+      return res.status(400).json({ message: "No se subió ningún archivo." });
     }
 
     const { activityId } = req.params;
     const conn = await pool.getConnection();
 
     try {
-      // 1. Obtener CourseID y MaxAttempts
       const [activityData] = await conn.query(
-        `SELECT m.CourseID, a.MaxAttempts
+        `SELECT m.CourseID, a.MaxSubmissions, c.Title
          FROM Activities a
          JOIN Modules m ON a.ModuleID = m.ModuleID
+         JOIN Courses c ON c.CourseID = m.CourseID
          WHERE a.ActivityID = ?`,
         [activityId]
       );
 
       if (!activityData.length) {
-        return res.status(400).json({ message: 'Actividad no encontrada.' });
+        return res.status(400).json({ message: "Actividad no encontrada." });
       }
 
       const courseId = activityData[0].CourseID;
-      const maxAttempts = activityData[0].MaxAttempts || 1;
+      const courseTitle = activityData[0].Title;
+      const subFolder = sanitizeFolderName(activityData[0].Title);
 
-      // 2. Verificar cuántos archivos ha subido el usuario
+      const maxSubmissions = activityData[0].MaxSubmissions || 1;
+
       const [attempts] = await conn.query(
         `SELECT COUNT(*) AS total FROM Files WHERE UserID = ? AND ActivityID = ?`,
         [req.user.id, activityId]
       );
 
-      if (attempts[0].total >= maxAttempts) {
+      if (attempts[0].total >= maxSubmissions) {
         return res.status(403).json({
-          message: `Has alcanzado el máximo de ${maxAttempts} intentos para esta actividad.`,
+          message: `Has alcanzado el máximo de ${maxSubmissions} intentos para esta actividad.`,
         });
       }
 
-      // 3. Obtener ruta real del curso (subcarpeta en documents)
-      const uploadDir = await getDocumentUploadPath(courseId);
+      const uploadDir = path.join(
+        __dirname,
+        "..",
+        "..",
+        "documents",
+        subFolder
+      );
       const { filename, mimetype } = req.file;
       let finalFilename = filename;
       let finalMimetype = mimetype;
       const originalPath = path.join(uploadDir, filename);
 
-      // 4. Conversión si es Word/PPT
       if (
-        mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-        mimetype === 'application/msword' ||
-        mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
-        mimetype === 'application/vnd.ms-powerpoint'
+        mimetype.includes("word") ||
+        mimetype.includes("powerpoint") ||
+        mimetype === "application/msword" ||
+        mimetype === "application/vnd.ms-powerpoint"
       ) {
-        const outputPath = originalPath.replace(path.extname(originalPath), '.pdf');
+        const outputPath = originalPath.replace(
+          path.extname(originalPath),
+          ".pdf"
+        );
         try {
           const fileBuffer = fs.readFileSync(originalPath);
           const pdfBuffer = await new Promise((resolve, reject) => {
-            libre.convert(fileBuffer, '.pdf', undefined, (err, done) => {
+            libre.convert(fileBuffer, ".pdf", undefined, (err, done) => {
+              if (err) reject(err);
+              else resolve(done);
+            });
+          });
+
+          fs.writeFileSync(outputPath, pdfBuffer);
+          fs.unlinkSync(originalPath);
+          finalFilename = path.basename(outputPath);
+          finalMimetype = "application/pdf";
+        } catch (error) {
+          console.error("Error al convertir archivo a PDF:", error);
+          return res
+            .status(500)
+            .json({ message: "Error al convertir archivo a PDF." });
+        }
+      }
+
+      const newFile = await File.create({
+        ActivityID: activityId,
+        UserID: req.user.id,
+        CourseID: courseId,
+        FileName: finalFilename,
+        FileType: finalMimetype,
+        Files: `documents/${subFolder}/${finalFilename}`,
+        UploadedAt: new Date(),
+        SubmissionID: null,
+      });
+
+      res.status(201).json(newFile);
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error("Error al subir archivo:", error);
+    res.status(500).json({ message: "Error interno al subir archivo." });
+  }
+};
+// Subir archivo ligado a una submission
+exports.uploadFileBySubmission = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res
+        .status(400)
+        .json({ message: "No se subió ningún archivo." });
+    }
+
+    const { submissionId } = req.params;
+
+    const conn = await pool.getConnection();
+    try {
+      const [rows] = await conn.query(
+        `SELECT s.*, c.Title
+         FROM Submissions s
+         JOIN Activities a ON a.ActivityID = s.ActivityID
+         JOIN Modules m ON m.ModuleID = a.ModuleID
+         JOIN Courses c ON c.CourseID = m.CourseID
+         WHERE s.SubmissionID = ?`,
+        [submissionId]
+      );
+
+      if (!rows.length) {
+        return res
+          .status(404)
+          .json({ message: "Entrega no encontrada." });
+      }
+
+      const submission = rows[0];
+      const {
+        ActivityID: activityId,
+        UserID: userId,
+        Title: courseTitle,
+      } = submission;
+
+      const subFolder = sanitizeFolderName(courseTitle);
+      const uploadDir = path.join(__dirname, "..", "..", "documents", subFolder);
+
+      // Crear carpeta si no existe
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      const ext = path.extname(req.file.originalname);
+      const baseName = path.basename(req.file.originalname, ext);
+      let finalFilename = `${baseName}${ext}`;
+      let finalMimetype = req.file.mimetype;
+
+      // Asegurar que el nombre sea único si ya existe
+      let counter = 1;
+      while (fs.existsSync(path.join(uploadDir, finalFilename))) {
+        finalFilename = `${baseName}-${counter}${ext}`;
+        counter++;
+      }
+
+      const originalPath = path.join(uploadDir, finalFilename);
+
+      // Escribir el archivo desde memoria
+      fs.writeFileSync(originalPath, req.file.buffer);
+
+      // Convertir a PDF si es Word/PPT
+      if (
+        finalMimetype.includes("word") ||
+        finalMimetype.includes("powerpoint") ||
+        finalMimetype === "application/msword" ||
+        finalMimetype === "application/vnd.ms-powerpoint"
+      ) {
+        const outputPath = originalPath.replace(ext, ".pdf");
+        try {
+          const fileBuffer = fs.readFileSync(originalPath);
+          const pdfBuffer = await new Promise((resolve, reject) => {
+            libre.convert(fileBuffer, ".pdf", undefined, (err, done) => {
               if (err) reject(err);
               else resolve(done);
             });
@@ -69,33 +197,40 @@ exports.uploadFile = async (req, res) => {
           fs.writeFileSync(outputPath, pdfBuffer);
           fs.unlinkSync(originalPath); // eliminar original
           finalFilename = path.basename(outputPath);
-          finalMimetype = 'application/pdf';
+          finalMimetype = "application/pdf";
         } catch (error) {
-          console.error('Error convirtiendo archivo:', error);
-          return res.status(500).json({ message: 'Error al convertir archivo a PDF.' });
+          console.error("Error al convertir archivo a PDF:", error);
+          return res
+            .status(500)
+            .json({ message: "Error al convertir archivo a PDF." });
         }
       }
 
-      // 5. Guardar archivo en base de datos con ruta completa
-      const newFile = await File.create({
+      const fileData = {
         ActivityID: activityId,
-        UserID: req.user.id,
-        CourseID: courseId,
+        UserID: userId,
+        CourseID: null,
         FileName: finalFilename,
         FileType: finalMimetype,
-        Files: `documents/${path.basename(uploadDir)}/${finalFilename}`,
+        Files: `documents/${subFolder}/${finalFilename}`,
         UploadedAt: new Date(),
+        SubmissionID: submissionId,
+      };
+
+      const newFileId = await File.create(fileData);
+
+      res.status(201).json({
+        message: "Archivo subido y convertido correctamente.",
+        fileId: newFileId,
       });
-
-      res.status(201).json(newFile);
-
     } finally {
       conn.release();
     }
-
   } catch (error) {
-    console.error('Error al subir archivo:', error);
-    res.status(500).json({ message: 'Error interno al subir archivo.' });
+    console.error("Error al subir archivo a entrega:", error);
+    res
+      .status(500)
+      .json({ message: "Error interno del servidor." });
   }
 };
 
@@ -104,11 +239,12 @@ async function getDocumentUploadPath(courseId) {
   const conn = await pool.getConnection();
   try {
     const [rows] = await conn.query(
-      `SELECT Title FROM Courses WHERE CourseID = ?`, [courseId]
+      `SELECT Title FROM Courses WHERE CourseID = ?`,
+      [courseId]
     );
     const courseName = rows.length > 0 ? rows[0].Title : "Curso";
     const subFolder = courseName.split(" ")[0].replace(/[^a-zA-Z0-9]/g, ""); // sanitizar
-    const dirPath = path.join(__dirname, '..', '..', 'documents', subFolder);
+    const dirPath = path.join(__dirname, "..", "..", "documents", subFolder);
 
     // Asegúrate de que exista
     if (!fs.existsSync(dirPath)) {
@@ -120,7 +256,6 @@ async function getDocumentUploadPath(courseId) {
     conn.release();
   }
 }
-
 
 exports.getFileById = async (req, res) => {
   const { id } = req.params;
@@ -135,7 +270,9 @@ exports.getFileById = async (req, res) => {
 
     // Verificar si el archivo existe
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: "Archivo no encontrado en el servidor" });
+      return res
+        .status(404)
+        .json({ message: "Archivo no encontrado en el servidor" });
     }
 
     // Configurar headers para la descarga
@@ -175,7 +312,9 @@ exports.deleteFile = async (req, res) => {
     const conn = await pool.getConnection();
 
     // Verificar si el archivo existe antes de intentar eliminarlo
-    const [file] = await conn.query("SELECT * FROM Files WHERE FileID = ?", [id]);
+    const [file] = await conn.query("SELECT * FROM Files WHERE FileID = ?", [
+      id,
+    ]);
     if (file.length === 0) {
       return res.status(404).json({ message: "Archivo no encontrado" });
     }
@@ -187,9 +326,9 @@ exports.deleteFile = async (req, res) => {
     }
 
     // Eliminar el archivo físicamente si es necesario (opcional)
-    const filePath = path.join(__dirname, '..', '..', file[0].Files);
+    const filePath = path.join(__dirname, "..", "..", file[0].Files);
     if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);  // Elimina el archivo físicamente
+      fs.unlinkSync(filePath); // Elimina el archivo físicamente
     }
 
     res.status(200).json({ message: "Archivo eliminado correctamente" });
@@ -200,24 +339,19 @@ exports.deleteFile = async (req, res) => {
     res.status(500).json({ message: "Error interno del servidor" });
   }
 };
-
-exports.addFeedback = async (req, res) => {
-  const { id } = req.params;
-  const { feedback } = req.body;
+exports.getFilesBySubmissionId = async (req, res) => {
+  const { submissionId } = req.params;
 
   try {
-    if (!feedback || feedback.trim() === "") {
-      return res.status(400).json({ message: "La retroalimentación no puede estar vacía." });
+    const files = await File.getBySubmissionId(submissionId);
+    if (!files || files.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "No se encontraron archivos para esta entrega." });
     }
-
-    const success = await File.addFeedback(id, feedback);
-    if (!success) {
-      return res.status(404).json({ message: "Archivo no encontrado o no se pudo actualizar." });
-    }
-
-    res.status(200).json({ message: "Retroalimentación agregada correctamente." });
+    res.json(files);
   } catch (error) {
-    console.error("❌ Error al agregar feedback:", error);
+    console.error("Error al obtener archivos por entrega:", error);
     res.status(500).json({ message: "Error interno del servidor." });
   }
 };
@@ -248,7 +382,6 @@ exports.updateScore = async (req, res) => {
     res.status(500).json({ message: "Error interno del servidor." });
   }
 };
-
 
 async function getCourseName(courseId) {
   // Aquí puedes implementar la lógica para obtener el nombre del curso desde la base de datos

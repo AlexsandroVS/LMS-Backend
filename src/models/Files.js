@@ -21,8 +21,9 @@ const File = {
     const conn = await pool.getConnection();
     try {
       const [result] = await conn.query(
-        `INSERT INTO Files (ActivityID, UserID, CourseID, FileName, FileType, Files, UploadedAt, Feedback) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `
+  INSERT INTO Files (ActivityID, UserID, CourseID, FileName, FileType, Files, UploadedAt, SubmissionID)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           fileData.ActivityID,
           fileData.UserID,
@@ -31,7 +32,7 @@ const File = {
           fileData.FileType,
           fileData.Files,
           fileData.UploadedAt,
-          fileData.Feedback || null,
+          fileData.SubmissionID || null,
         ]
       );
       return result.insertId;
@@ -92,21 +93,14 @@ const File = {
       conn.release();
     }
   },
-  async addFeedback(fileId, feedback) {
-    if (!feedback || feedback.trim() === "") {
-      throw new Error("La retroalimentación no puede estar vacía.");
-    }
-
+  async getBySubmissionId(submissionId) {
     const conn = await pool.getConnection();
     try {
-      const [result] = await conn.query(
-        `UPDATE Files SET Feedback = ? WHERE FileID = ?`,
-        [feedback, fileId]
+      const [rows] = await conn.query(
+        `SELECT * FROM Files WHERE SubmissionID = ?`,
+        [submissionId]
       );
-      return result.affectedRows > 0;
-    } catch (error) {
-      console.error("Error al actualizar feedback:", error);
-      throw error;
+      return rows;
     } finally {
       conn.release();
     }

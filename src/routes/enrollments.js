@@ -8,5 +8,6 @@ router.get("/:id", controller.getEnrollmentById);
 router.post("/", controller.createEnrollment);
 router.put("/:id", controller.updateEnrollment);
 router.delete("/:id", controller.deleteEnrollment);
+router.get("/student/:studentId/courses", controller.getCoursesByStudent);
 
 module.exports = router;

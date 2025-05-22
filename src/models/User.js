@@ -3,8 +3,10 @@ const bcrypt = require("bcrypt");
 
 // Configuración de campos para consultas
 const USER_FIELDS = {
-  basic: "UserID, Name, Email, Avatar, Role, LastLogin, isActive",
-  withPassword: "UserID, Name, Email, Avatar, Role, Password"
+  basic:
+    "UserID, Name, Email, Avatar, Role, LastLogin, isActive, Biografia",
+  withPassword:
+    "UserID, Name, Email, Avatar, Role, Password, Biografia",
 };
 
 class User {
@@ -56,7 +58,7 @@ class User {
         userData.email,
         userData.password,
         userData.avatar || null,
-        userData.role || "student"
+        userData.role || "student",
       ]
     );
 
@@ -73,7 +75,10 @@ class User {
       avatar: "Avatar",
       role: "Role",
       isActive: "isActive",
-      LastLogin: "LastLogin"
+      lastLogin: "LastLogin",
+      bio: "Biografia", // Mapeo para frontend (bio -> Biografia)
+      biografia: "Biografia", // Por si acaso
+    
     };
 
     Object.entries(fieldMap).forEach(([key, dbField]) => {
@@ -93,13 +98,10 @@ class User {
     );
     return true;
   }
-
+  
   static async delete(id) {
     // Eliminación directa con DELETE ON CASCADE
-    await this.executeQuery(
-      `DELETE FROM Users WHERE UserID = ?`,
-      [id]
-    );
+    await this.executeQuery(`DELETE FROM Users WHERE UserID = ?`, [id]);
     return true;
   }
 

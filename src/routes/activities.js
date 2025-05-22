@@ -87,7 +87,7 @@ router.get(
 router.post(
   "/courses/:courseId/modules/:moduleId/activities",
   protect,
-  upload.single("file"),
+  upload.array("file",10),
   (err, req, res, next) => {
     if (err instanceof multer.MulterError) {
       return res.status(400).json({

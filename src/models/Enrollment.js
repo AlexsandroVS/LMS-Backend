@@ -62,7 +62,23 @@ const Enrollment = {
     } finally {
       conn.release();
     }
+  },
+  
+  async getCoursesByStudent(studentId) {
+  const conn = await pool.getConnection();
+  try {
+    const [rows] = await conn.query(`
+      SELECT DISTINCT ca.CourseID
+      FROM StudentEnrollments se
+      JOIN CourseAssignments ca ON se.AssignmentID = ca.AssignmentID
+      WHERE se.StudentID = ?
+    `, [studentId]);
+    return rows.map(row => row.CourseID);
+  } finally {
+    conn.release();
   }
+}
+
 };
 
 module.exports = Enrollment;

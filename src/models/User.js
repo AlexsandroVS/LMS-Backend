@@ -1,12 +1,11 @@
 const pool = require("../config/db");
 const bcrypt = require("bcrypt");
 
-// Configuración de campos para consultas
 const USER_FIELDS = {
   basic:
-    "UserID, Name, Email, Avatar, Role, LastLogin, isActive, Biografia",
+    "UserID, Name, Email, Avatar, Role, LastLogin, isActive, Biografia, RegistrationDate",
   withPassword:
-    "UserID, Name, Email, Avatar, Role, Password, Biografia",
+    "UserID, Name, Email, Avatar, Role, Password, Biografia, RegistrationDate",
 };
 
 class User {
@@ -76,8 +75,8 @@ class User {
       role: "Role",
       isActive: "isActive",
       lastLogin: "LastLogin",
-      bio: "Biografia", // Mapeo para frontend (bio -> Biografia)
-      biografia: "Biografia", // Por si acaso
+      bio: "Biografia", 
+      biografia: "Biografia", 
     
     };
 

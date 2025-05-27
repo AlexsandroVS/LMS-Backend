@@ -1,12 +1,10 @@
 const jwt = require('jsonwebtoken');
 
+// Middleware de protección con JWT desde cookies
 exports.protect = async (req, res, next) => {
   try {
-    // 1. Obtener token
-    let token;
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-      token = req.headers.authorization.split(' ')[1];
-    }
+    // 1. Obtener token desde cookie
+    const token = req.cookies?.token;
 
     if (!token) {
       return res.status(401).json({ error: 'Acceso no autorizado' });
@@ -19,10 +17,12 @@ exports.protect = async (req, res, next) => {
     req.user = decoded;
     next();
   } catch (error) {
-    res.status(401).json({ error: 'Token inválido o expirado' });
+    console.error("❌ Error en middleware protect:", error);
+    return res.status(401).json({ error: 'Token inválido o expirado' });
   }
 };
 
+// Restringir acceso por roles
 exports.restrictTo = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
@@ -31,6 +31,8 @@ exports.restrictTo = (...roles) => {
     next();
   };
 };
+
+// Solo para administradores
 exports.checkAdmin = (req, res, next) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Acceso no autorizado' });

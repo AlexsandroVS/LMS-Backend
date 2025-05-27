@@ -113,7 +113,6 @@ router.get(
 // Obtener archivos asociados a una actividad
 router.get(
   "/activities/:activityId/files",
-  protect, // Asegúrate de que protect esté aplicado
   filesController.getFilesByActivityId
 );
 router.get("/files/:id", filesController.getFileById);

@@ -51,6 +51,11 @@ router.put(
   protect,
   submissionsController.setFinalSubmission
 );
+router.patch(
+  "/submissions/:submissionId/score",
+  protect,
+  submissionsController.updateScore
+);
 
 
 

@@ -1,121 +1,57 @@
 const pool = require("../config/db");
 
-// 1. Participación por curso (basado en archivos entregados)
-exports.getParticipationByCourse = async (req, res) => {
+// 1. Promedio de notas por módulo en un curso específico
+exports.getModuleAveragesByCourse = async (req, res) => {
+  const { courseId } = req.params;
   try {
     const [rows] = await pool.query(`
       SELECT 
-        c.Title AS Curso,
-        ROUND(COUNT(DISTINCT s.UserID) * 100 / (
-          SELECT COUNT(*) FROM Users WHERE Role = 'student'
-        ), 2) AS ParticipacionPorcentaje
-      FROM Courses c
-      JOIN Modules m ON c.CourseID = m.CourseID
-      JOIN Activities a ON a.ModuleID = m.ModuleID
-      JOIN Submissions s ON s.ActivityID = a.ActivityID
-      WHERE s.IsFinal = 1
-      GROUP BY c.CourseID;
-    `);
+        m.ModuleID,
+        m.Title AS Modulo,
+        ROUND(AVG(s.Score), 2) AS PromedioNotas,
+        COUNT(DISTINCT s.UserID) AS EstudiantesEvaluados
+      FROM Modules m
+      JOIN Activities a ON m.ModuleID = a.ModuleID
+      LEFT JOIN Submissions s ON a.ActivityID = s.ActivityID AND s.IsFinal = 1 AND s.Score IS NOT NULL
+      WHERE m.CourseID = ?
+      GROUP BY m.ModuleID, m.Title
+      ORDER BY m.ModuleOrder;
+    `, [courseId]);
+    
     res.json(rows);
   } catch (error) {
-    console.error("Error en participación por curso:", error);
+    console.error("Error en promedio por módulo:", error);
     res.status(500).json({ message: "Error interno del servidor." });
   }
 };
 
-// 2. Promedio por curso (desde Submissions)
-exports.getAverageScoreByCourse = async (req, res) => {
+// 2. Estudiantes con bajo rendimiento en un curso específico (Score promedio < 11)
+exports.getLowPerformanceStudentsByCourse = async (req, res) => {
+  const { courseId } = req.params;
   try {
     const [rows] = await pool.query(`
       SELECT 
-        c.Title AS Curso,
-        ROUND(AVG(s.Score), 2) AS PromedioNotas
-      FROM Courses c
-      JOIN Modules m ON c.CourseID = m.CourseID
-      JOIN Activities a ON a.ModuleID = m.ModuleID
-      JOIN Submissions s ON s.ActivityID = a.ActivityID
-      WHERE s.IsFinal = 1 AND s.Score IS NOT NULL
-      GROUP BY c.CourseID;
-    `);
-    res.json(rows);
-  } catch (error) {
-    console.error("Error en promedio por curso:", error);
-    res.status(500).json({ message: "Error interno del servidor." });
-  }
-};
-
-// 3. Entregas por estudiante
-exports.getSubmissionsByStudent = async (req, res) => {
-  try {
-    const [rows] = await pool.query(`
-      SELECT u.Name, COUNT(s.SubmissionID) AS Entregas
-      FROM Users u
-      LEFT JOIN Submissions s ON s.UserID = u.UserID
-      WHERE u.Role = 'student'
-      GROUP BY u.UserID
-      ORDER BY Entregas DESC;
-    `);
-    res.json(rows);
-  } catch (error) {
-    console.error("Error en entregas por estudiante:", error);
-    res.status(500).json({ message: "Error interno del servidor." });
-  }
-};
-
-// 4. Cumplimiento por actividad
-exports.getActivityCompliance = async (req, res) => {
-  try {
-    const [rows] = await pool.query(`
-      SELECT 
-        a.Title,
-        COUNT(s.SubmissionID) AS Entregas,
-        (SELECT COUNT(*) FROM Users WHERE Role = 'student') - COUNT(DISTINCT s.UserID) AS Faltantes
-      FROM Activities a
-      LEFT JOIN Submissions s ON s.ActivityID = a.ActivityID AND s.IsFinal = 1
-      GROUP BY a.ActivityID;
-    `);
-    res.json(rows);
-  } catch (error) {
-    console.error("Error en cumplimiento por actividad:", error);
-    res.status(500).json({ message: "Error interno del servidor." });
-  }
-};
-
-// 5. Top 5 actividades con menor cumplimiento
-exports.getTopPendingActivities = async (req, res) => {
-  try {
-    const [rows] = await pool.query(`
-      SELECT 
-        a.Title,
-        COUNT(s.SubmissionID) AS Entregas,
-        (SELECT COUNT(*) FROM Users WHERE Role = 'student') AS TotalEstudiantes,
-        (SELECT COUNT(*) FROM Users WHERE Role = 'student') - COUNT(DISTINCT s.UserID) AS Pendientes
-      FROM Activities a
-      LEFT JOIN Submissions s ON s.ActivityID = a.ActivityID AND s.IsFinal = 1
-      GROUP BY a.ActivityID
-      ORDER BY Pendientes DESC
-      LIMIT 5;
-    `);
-    res.json(rows);
-  } catch (error) {
-    console.error("Error en top de actividades con menor cumplimiento:", error);
-    res.status(500).json({ message: "Error interno del servidor." });
-  }
-};
-
-// 6. Estudiantes con bajo rendimiento (Score promedio < 11)
-exports.getLowPerformanceStudents = async (req, res) => {
-  try {
-    const [rows] = await pool.query(`
-      SELECT 
+        u.UserID,
         u.Name,
-        ROUND(AVG(s.Score), 2) AS Promedio
+        ROUND(AVG(s.Score), 2) AS Promedio,
+        COUNT(s.SubmissionID) AS Entregas
       FROM Users u
-      JOIN Submissions s ON s.UserID = u.UserID
-      WHERE u.Role = 'student' AND s.IsFinal = 1 AND s.Score IS NOT NULL
-      GROUP BY u.UserID
-      HAVING Promedio < 11;
-    `);
+      JOIN Enrollments e ON u.UserID = e.StudentID
+      JOIN Assignments a ON e.AssignmentID = a.AssignmentID
+      JOIN Submissions s ON u.UserID = s.UserID
+      JOIN Activities act ON s.ActivityID = act.ActivityID
+      JOIN Modules m ON act.ModuleID = m.ModuleID
+      WHERE 
+        u.Role = 'student' 
+        AND a.CourseID = ?
+        AND s.IsFinal = 1 
+        AND s.Score IS NOT NULL
+      GROUP BY u.UserID, u.Name
+      HAVING Promedio < 11
+      ORDER BY Promedio ASC
+      LIMIT 5;
+    `, [courseId]);
+    
     res.json(rows);
   } catch (error) {
     console.error("Error en estudiantes con bajo rendimiento:", error);
@@ -123,19 +59,85 @@ exports.getLowPerformanceStudents = async (req, res) => {
   }
 };
 
-// 7. Promedio global de un estudiante
-exports.getGlobalAverage = async (req, res) => {
-  const { userId } = req.params;
+// 3. Estudiantes con mejor rendimiento en un curso específico
+exports.getTopPerformanceStudentsByCourse = async (req, res) => {
+  const { courseId } = req.params;
   try {
-    const [[row]] = await pool.query(`
-      SELECT ROUND(AVG(s.Score), 2) AS PromedioGlobal
-      FROM Submissions s
-      WHERE s.UserID = ? AND s.IsFinal = 1 AND s.Score IS NOT NULL;
-    `, [userId]);
-
-    res.json(row);
+    const [rows] = await pool.query(`
+      SELECT 
+        u.UserID,
+        u.Name,
+        ROUND(AVG(s.Score), 2) AS Promedio,
+        COUNT(s.SubmissionID) AS Entregas
+      FROM Users u
+      JOIN Enrollments e ON u.UserID = e.StudentID
+      JOIN Assignments a ON e.AssignmentID = a.AssignmentID
+      JOIN Submissions s ON u.UserID = s.UserID
+      JOIN Activities act ON s.ActivityID = act.ActivityID
+      JOIN Modules m ON act.ModuleID = m.ModuleID
+      WHERE 
+        u.Role = 'student' 
+        AND a.CourseID = ?
+        AND s.IsFinal = 1 
+        AND s.Score IS NOT NULL
+      GROUP BY u.UserID, u.Name
+      HAVING Promedio >= 11
+      ORDER BY Promedio DESC
+      LIMIT 5;
+    `, [courseId]);
+    
+    res.json(rows);
   } catch (error) {
-    console.error("Error en promedio global del estudiante:", error);
+    console.error("Error en estudiantes con mejor rendimiento:", error);
+    res.status(500).json({ message: "Error interno del servidor." });
+  }
+};
+
+// 4. Actividades con bajo número de entregas en un curso específico
+exports.getLowCompletionActivitiesByCourse = async (req, res) => {
+  const { courseId } = req.params;
+  try {
+    const [rows] = await pool.query(`
+      SELECT 
+        a.ActivityID,
+        a.Title AS Actividad,
+        m.Title AS Modulo,
+        COUNT(DISTINCT s.UserID) AS Entregas,
+        (SELECT COUNT(DISTINCT e.StudentID) 
+         FROM Enrollments e
+         JOIN Assignments a2 ON e.AssignmentID = a2.AssignmentID
+         WHERE a2.CourseID = ?) AS TotalEstudiantes,
+        (SELECT COUNT(DISTINCT e.StudentID) 
+         FROM Enrollments e
+         JOIN Assignments a2 ON e.AssignmentID = a2.AssignmentID
+         WHERE a2.CourseID = ?) - COUNT(DISTINCT s.UserID) AS Pendientes
+      FROM Activities a
+      JOIN Modules m ON a.ModuleID = m.ModuleID
+      LEFT JOIN Submissions s ON a.ActivityID = s.ActivityID AND s.IsFinal = 1
+      WHERE m.CourseID = ?
+      GROUP BY a.ActivityID, a.Title, m.Title
+      ORDER BY Pendientes DESC
+      LIMIT 5;
+    `, [courseId, courseId, courseId]);
+    
+    res.json(rows);
+  } catch (error) {
+    console.error("Error en actividades con bajo cumplimiento:", error);
+    res.status(500).json({ message: "Error interno del servidor." });
+  }
+};
+
+// 5. Obtener lista de cursos para el filtro
+exports.getCoursesForFilter = async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT c.CourseID, c.Title 
+      FROM Courses c
+      ORDER BY c.Title;
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error("Error obteniendo cursos:", error);
     res.status(500).json({ message: "Error interno del servidor." });
   }
 };

@@ -1,6 +1,6 @@
 const Submission = require("../models/Submission");
 const Activity = require("../models/Activity"); // Necesario para obtener MaxSubmissions
-
+const pool = require('../config/db'); 
 // Crear una nueva entrega
 exports.createSubmission = async (req, res) => {
   const { activityId } = req.params;
@@ -122,5 +122,31 @@ exports.getUserOverallAverage = async (req, res) => {
   } catch (error) {
     console.error("❌ Error al calcular promedio general:", error);
     res.status(500).json({ message: "Error al calcular promedio general." });
+  }
+};
+
+exports.updateScore = async (req, res) => {
+  try {
+    const { submissionId } = req.params;
+    const { score } = req.body;
+
+    if (typeof score !== "number") {
+      return res.status(400).json({ message: "Score inválido" });
+    }
+
+    // Aquí tu lógica para actualizar el score en DB
+    const [result] = await pool.query(
+      `UPDATE Submissions SET Score = ?, GradedAt = NOW() WHERE SubmissionID = ?`,
+      [score, submissionId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Entrega no encontrada" });
+    }
+
+    res.status(200).json({ message: "Score actualizado correctamente" });
+  } catch (error) {
+    console.error("Error al actualizar score:", error);
+    res.status(500).json({ message: "Error interno" });
   }
 };

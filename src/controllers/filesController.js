@@ -15,7 +15,7 @@ function sanitizeFolderName(name) {
 // Subir archivo normal (actividad sin submission)
 exports.uploadFile = async (req, res) => {
   try {
-    if (!req.file) {
+    if (!req.files || req.files.length === 0) {
       return res.status(400).json({ message: "No se subió ningún archivo." });
     }
 
@@ -23,6 +23,7 @@ exports.uploadFile = async (req, res) => {
     const conn = await pool.getConnection();
 
     try {
+      // Obtener datos de la actividad
       const [activityData] = await conn.query(
         `SELECT m.CourseID, a.MaxSubmissions, c.Title
          FROM Activities a
@@ -38,76 +39,81 @@ exports.uploadFile = async (req, res) => {
 
       const courseId = activityData[0].CourseID;
       const courseTitle = activityData[0].Title;
-      const subFolder = sanitizeFolderName(activityData[0].Title);
-
+      const subFolder = sanitizeFolderName(courseTitle);
       const maxSubmissions = activityData[0].MaxSubmissions || 1;
 
-      const [attempts] = await conn.query(
-        `SELECT COUNT(*) AS total FROM Files WHERE UserID = ? AND ActivityID = ?`,
-        [req.user.id, activityId]
-      );
-
-      if (attempts[0].total >= maxSubmissions) {
-        return res.status(403).json({
-          message: `Has alcanzado el máximo de ${maxSubmissions} intentos para esta actividad.`,
-        });
-      }
-
-      const uploadDir = path.join(
-        __dirname,
-        "..",
-        "..",
-        "documents",
-        subFolder
-      );
-      const { filename, mimetype } = req.file;
-      let finalFilename = filename;
-      let finalMimetype = mimetype;
-      const originalPath = path.join(uploadDir, filename);
-
-      if (
-        mimetype.includes("word") ||
-        mimetype.includes("powerpoint") ||
-        mimetype === "application/msword" ||
-        mimetype === "application/vnd.ms-powerpoint"
-      ) {
-        const outputPath = originalPath.replace(
-          path.extname(originalPath),
-          ".pdf"
+      // Solo verificar intentos si el usuario es estudiante
+      if (req.user.role === 'student') {
+        // Verificar número de intentos del usuario para la actividad
+        const [attempts] = await conn.query(
+          `SELECT COUNT(*) AS total FROM Files WHERE UserID = ? AND ActivityID = ?`,
+          [req.user.id, activityId]
         );
-        try {
-          const fileBuffer = fs.readFileSync(originalPath);
-          const pdfBuffer = await new Promise((resolve, reject) => {
-            libre.convert(fileBuffer, ".pdf", undefined, (err, done) => {
-              if (err) reject(err);
-              else resolve(done);
-            });
-          });
 
-          fs.writeFileSync(outputPath, pdfBuffer);
-          fs.unlinkSync(originalPath);
-          finalFilename = path.basename(outputPath);
-          finalMimetype = "application/pdf";
-        } catch (error) {
-          console.error("Error al convertir archivo a PDF:", error);
-          return res
-            .status(500)
-            .json({ message: "Error al convertir archivo a PDF." });
+        if (attempts[0].total + req.files.length > maxSubmissions) {
+          return res.status(403).json({
+            message: `Has alcanzado el máximo de ${maxSubmissions} intentos para esta actividad.`,
+          });
         }
       }
 
-      const newFile = await File.create({
-        ActivityID: activityId,
-        UserID: req.user.id,
-        CourseID: courseId,
-        FileName: finalFilename,
-        FileType: finalMimetype,
-        Files: `documents/${subFolder}/${finalFilename}`,
-        UploadedAt: new Date(),
-        SubmissionID: null,
-      });
+      const uploadDir = path.join(__dirname, "..", "..", "documents", subFolder);
 
-      res.status(201).json(newFile);
+      const uploadedFiles = [];
+
+      for (const file of req.files) {
+        let { filename, mimetype } = file;
+        const originalPath = path.join(uploadDir, filename);
+
+        // Convertir a PDF si es Word o PowerPoint
+        if (
+          mimetype.includes("word") ||
+          mimetype.includes("powerpoint") ||
+          mimetype === "application/msword" ||
+          mimetype === "application/vnd.ms-powerpoint"
+        ) {
+          const outputPath = originalPath.replace(
+            path.extname(originalPath),
+            ".pdf"
+          );
+          try {
+            const fileBuffer = fs.readFileSync(originalPath);
+            const pdfBuffer = await new Promise((resolve, reject) => {
+              libre.convert(fileBuffer, ".pdf", undefined, (err, done) => {
+                if (err) reject(err);
+                else resolve(done);
+              });
+            });
+
+            fs.writeFileSync(outputPath, pdfBuffer);
+            fs.unlinkSync(originalPath);
+
+            filename = path.basename(outputPath);
+            mimetype = "application/pdf";
+          } catch (error) {
+            console.error("Error al convertir archivo a PDF:", error);
+            return res
+              .status(500)
+              .json({ message: "Error al convertir archivo a PDF." });
+          }
+        }
+
+        // Guardar info en base de datos
+        const newFile = await File.create({
+          ActivityID: activityId,
+          UserID: req.user.id,
+          CourseID: courseId,
+          FileName: filename,
+          FileType: mimetype,
+          Files: `documents/${subFolder}/${filename}`,
+          UploadedAt: new Date(),
+          SubmissionID: null,
+        });
+
+        uploadedFiles.push(newFile);
+      }
+
+      res.status(201).json({ message: "Archivos subidos correctamente", files: uploadedFiles });
     } finally {
       conn.release();
     }

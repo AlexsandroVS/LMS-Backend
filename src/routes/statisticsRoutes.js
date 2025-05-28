@@ -1,17 +1,12 @@
-const express = require("express");
+// En tu archivo de rutas (routes/statistics.js)
+const express = require('express');
 const router = express.Router();
-const stats = require("../controllers/statisticsController");
+const statisticsController = require('../controllers/statisticsController');
 
-// Estadísticas generales
-router.get("/participacion-por-curso", stats.getParticipationByCourse);
-router.get("/promedio-por-curso", stats.getAverageScoreByCourse);
-router.get("/entregas-por-estudiante", stats.getSubmissionsByStudent);
-router.get("/cumplimiento-por-actividad", stats.getActivityCompliance);
-router.get("/bajo-rendimiento", stats.getLowPerformanceStudents);
-router.get("/top-pending-activities", stats.getTopPendingActivities);
-
-
-// Promedio global individual
-router.get("/global-average/:userId", stats.getGlobalAverage);
+router.get('/courses', statisticsController.getCoursesForFilter);
+router.get('/:courseId/module-averages', statisticsController.getModuleAveragesByCourse);
+router.get('/:courseId/low-performance-students', statisticsController.getLowPerformanceStudentsByCourse);
+router.get('/:courseId/top-performance-students', statisticsController.getTopPerformanceStudentsByCourse);
+router.get('/:courseId/low-completion-activities', statisticsController.getLowCompletionActivitiesByCourse);
 
 module.exports = router;

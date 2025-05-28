@@ -12,9 +12,9 @@ function sanitizeFolderName(name) {
   return name
     .split(" ")[0]
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") 
-    .replace(/[^a-zA-Z0-9]/g, "")    
-    .toUpperCase(); 
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase();
 }
 async function getCourseName(courseId) {
   const conn = await pool.getConnection();
@@ -23,7 +23,7 @@ async function getCourseName(courseId) {
       `SELECT Title FROM Courses WHERE CourseID = ?`,
       [courseId]
     );
-    return rows.length > 0 ? rows[0].Title : 'CursoDesconocido';
+    return rows.length > 0 ? rows[0].Title : "CursoDesconocido";
   } finally {
     conn.release();
   }
@@ -33,17 +33,21 @@ async function getCourseName(courseId) {
 const storage = multer.diskStorage({
   destination: async (req, file, cb) => {
     try {
+      console.log("📥 Multer: Iniciando destino para el archivo...");
       const courseId = req.params.courseId;
+      console.log("📥 courseId recibido:", courseId);
+
       const courseName = await getCourseName(courseId);
       const subFolder = sanitizeFolderName(courseName);
+      const dirPath = path.join(__dirname, "..", "..", "documents", subFolder);
 
-      const dirPath = path.join(__dirname, '..', '..', 'documents', subFolder);
       if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
       }
 
       cb(null, dirPath);
     } catch (err) {
+      console.error("❌ Error en multer.destination:", err);
       cb(err, null);
     }
   },
@@ -53,7 +57,7 @@ const storage = multer.diskStorage({
       const courseId = req.params.courseId;
       const courseName = await getCourseName(courseId);
       const subFolder = sanitizeFolderName(courseName);
-      const dirPath = path.join(__dirname, '..', '..', 'documents', subFolder);
+      const dirPath = path.join(__dirname, "..", "..", "documents", subFolder);
 
       const ext = path.extname(file.originalname);
       const baseName = path.basename(file.originalname, ext);
@@ -69,10 +73,8 @@ const storage = multer.diskStorage({
     } catch (err) {
       cb(err, "");
     }
-  }
+  },
 });
-
-
 
 const upload = multer({ storage: storage });
 const uploadMemory = multer({ storage: multer.memoryStorage() });
@@ -83,17 +85,24 @@ async function getCourseName(courseId) {
       `SELECT Title FROM Courses WHERE CourseID = ?`,
       [courseId]
     );
-    return rows.length > 0 ? rows[0].Title : 'Curso Desconocido';
+    return rows.length > 0 ? rows[0].Title : "Curso Desconocido";
   } finally {
     conn.release();
   }
 }
 
-// Subir archivo para una actividad 
+// Subir archivo para una actividad
 router.post(
   "/courses/:courseId/modules/:moduleId/activities/:activityId/files",
-  protect, // Aquí es donde se asegura la autenticación
-  upload.single("file"),
+  protect,
+  upload.array("file", 10),
+  (req, res, next) => {
+    console.log("✅ Archivos recibidos:", req.files);
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "No se subió ningún archivo." });
+    }
+    next();
+  },
   filesController.uploadFile
 );
 

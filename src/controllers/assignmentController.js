@@ -45,3 +45,27 @@ exports.deleteAssignment = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.getStudentsByTeacher = async (req, res) => {
+  const { teacherId } = req.params;
+
+  try {
+    const students = await Assignment.getStudentsByTeacher(teacherId);
+
+    const transformedStudents = students.map(student => ({
+      StudentID: student.StudentID,
+      StudentName: student.StudentName.trim(),
+      StudentEmail: student.StudentEmail,
+      StudentAvatar: student.StudentAvatar || '/img/default-avatar.png',
+      StudentRole: student.StudentRole,
+      RegistrationDate: student.StudentRegistrationDate,
+      CourseID: student.CourseID,
+      CourseTitle: student.CourseTitle
+    }));
+
+    res.json(transformedStudents);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error al obtener estudiantes' });
+  }
+};

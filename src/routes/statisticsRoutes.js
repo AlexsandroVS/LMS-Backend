@@ -3,6 +3,8 @@ const express = require('express');
 const router = express.Router();
 const statisticsController = require('../controllers/statisticsController');
 
+router.get('/teacher/:id/courses', statisticsController.getCoursesByTeacher);
+
 router.get('/courses', statisticsController.getCoursesForFilter);
 router.get('/:courseId/module-averages', statisticsController.getModuleAveragesByCourse);
 router.get('/:courseId/low-performance-students', statisticsController.getLowPerformanceStudentsByCourse);

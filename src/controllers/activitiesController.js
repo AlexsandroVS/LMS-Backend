@@ -63,16 +63,18 @@ exports.createActivity = async (req, res) => {
 
     for (const file of files) {
       const inputPath = path.join(dirPath, file.filename);
-      const fileBuffer = fs.readFileSync(inputPath); 
+      const fileBuffer = fs.readFileSync(inputPath);
 
       let finalFilename = file.filename;
       let finalMimetype = file.mimetype;
 
       // Convertir a PDF si es un documento compatible
       if (
-        file.mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        file.mimetype ===
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
         file.mimetype === "application/msword" ||
-        file.mimetype === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+        file.mimetype ===
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
         file.mimetype === "application/vnd.ms-powerpoint"
       ) {
         const outputPath = inputPath.replace(path.extname(inputPath), ".pdf");
@@ -117,13 +119,11 @@ exports.createActivity = async (req, res) => {
       activity: { id: activityId, title },
       files: savedFiles,
     });
-
   } catch (error) {
     console.error("❌ Error en createActivity:", error);
     res.status(500).json({ message: "Error interno del servidor" });
   }
 };
-
 
 exports.updateActivity = async (req, res) => {
   try {
@@ -147,25 +147,44 @@ exports.updateActivity = async (req, res) => {
 
 exports.deleteActivity = async (req, res) => {
   const { id } = req.params;
+  const conn = await pool.getConnection();
+
   try {
-    const conn = await pool.getConnection();
-    try {
-      await conn.beginTransaction();
-      await conn.query("DELETE FROM Activities WHERE ActivityID = ?", [id]);
-      await conn.commit();
-      res.json({ message: "Actividad eliminada exitosamente" });
-    } catch (error) {
-      await conn.rollback();
-      throw error;
-    } finally {
-      conn.release();
-    }
+    await conn.beginTransaction();
+
+    // 1. Obtener todos los archivos asociados a la actividad
+    const [files] = await conn.query(
+      "SELECT Files FROM Files WHERE ActivityID = ?",
+      [id]
+    );
+
+    // 2. Eliminar los archivos físicos
+    files.forEach((file) => {
+      // ✅ Usar correctamente la ruta relativa:
+      const fullPath = path.join(__dirname, "..", "..", file.Files);
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+      }
+    });
+
+    // 3. Eliminar registros de archivos en la base de datos
+    await conn.query("DELETE FROM Files WHERE ActivityID = ?", [id]);
+
+    // 4. Eliminar la actividad
+    await conn.query("DELETE FROM Activities WHERE ActivityID = ?", [id]);
+
+    await conn.commit();
+    res.json({
+      message: "Actividad y archivos asociados eliminados exitosamente",
+    });
   } catch (error) {
+    await conn.rollback();
     console.error("❌ Error al eliminar actividad:", error);
     res.status(500).json({ message: "Error al eliminar actividad" });
+  } finally {
+    conn.release();
   }
 };
-
 
 async function getCourseName(courseId) {
   const conn = await pool.getConnection();

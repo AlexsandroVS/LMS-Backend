@@ -4,7 +4,7 @@ const Course = {
     const conn = await pool.getConnection();
     try {
       return await conn.query(`
-        SELECT c.CourseID, c.Title, c.Description, c.Icon, c.Status, c.DurationHours,
+        SELECT c.CourseID, c.Title, c.Description, c.Icon, c.Status,
                c.CreatedBy, c.Color, c.Image, c.Category,
                u.Name as CreatedByName
         FROM Courses c
@@ -19,7 +19,7 @@ const Course = {
     try {
       const searchParam = `%${searchTerm}%`;
       return await conn.query(`
-        SELECT c.CourseID, c.Title, c.Description, c.Icon, c.Status, c.DurationHours,
+        SELECT c.CourseID, c.Title, c.Description, c.Icon, c.Status,
                c.CreatedBy, c.Color, c.Image, c.Category,
                u.Name as CreatedByName
         FROM Courses c
@@ -36,7 +36,7 @@ const Course = {
     const conn = await pool.getConnection();
     try {
       const [rows] = await conn.query(
-        `SELECT c.CourseID, c.Title, c.Description, c.Icon, c.Status, c.DurationHours,
+        `SELECT c.CourseID, c.Title, c.Description, c.Icon, c.Status,
                 c.CreatedBy, c.CreatedAt, c.Color, c.Image, c.Category,
                 u.Name as CreatedByName
          FROM Courses c
@@ -54,14 +54,13 @@ const Course = {
     try {
       const result = await conn.query(
         `INSERT INTO Courses 
-          (Title, Description, Icon, Status, DurationHours, CreatedBy, Color, Image, Category) 
+          (Title, Description, Icon, Status, CreatedBy, Color, Image, Category) 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           courseData.title,
           courseData.description,
           courseData.icon || null,
           courseData.status || "active",
-          courseData.durationHours || 0,
           courseData.createdBy,
           courseData.color || null,
           courseData.image || null,
@@ -85,7 +84,6 @@ const Course = {
         description: "Description",
         icon: "Icon",
         status: "Status",
-        durationHours: "DurationHours",
         color: "Color",
         image: "Image",
         category: "Category",

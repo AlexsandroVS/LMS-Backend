@@ -3,9 +3,9 @@ const bcrypt = require("bcrypt");
 
 const USER_FIELDS = {
   basic:
-    "UserID, Name, Email, Avatar, Role, LastLogin, isActive, Biografia, RegistrationDate",
+    "UserID, Name, Email, Avatar, Role, LastLogin, IsActive, Biografia, RegistrationDate",
   withPassword:
-    "UserID, Name, Email, Avatar, Role, Password, Biografia, RegistrationDate",
+    "UserID, Name, Email, Avatar, Role, Password, LastLogin, IsActive, Biografia, RegistrationDate",
 };
 
 class User {
@@ -75,13 +75,20 @@ class User {
       role: "Role",
       isActive: "isActive",
       lastLogin: "LastLogin",
-      bio: "Biografia", 
-      biografia: "Biografia", 
-    
+      biografia: "Biografia",
+      // Asegúrate de mapear todos los campos posibles
+      bio: "Biografia", // Alias para biografia
     };
 
+    // Verificación explícita para el avatar
+    if (userData.avatar !== undefined) {
+      updates.push("Avatar = ?");
+      params.push(userData.avatar);
+    }
+
+    // Procesar otros campos
     Object.entries(fieldMap).forEach(([key, dbField]) => {
-      if (userData[key] !== undefined) {
+      if (key !== "avatar" && userData[key] !== undefined) {
         updates.push(`${dbField} = ?`);
         params.push(userData[key]);
       }
@@ -91,13 +98,16 @@ class User {
       throw new Error("No se proporcionaron campos para actualizar");
     }
 
-    await this.executeQuery(
-      `UPDATE Users SET ${updates.join(", ")} WHERE UserID = ?`,
-      [...params, id]
-    );
+    const query = `UPDATE Users SET ${updates.join(", ")} WHERE UserID = ?`;
+    params.push(id);
+
+    console.log("Query:", query); // Para depuración
+    console.log("Params:", params); // Para depuración
+
+    await this.executeQuery(query, params);
     return true;
   }
-  
+
   static async delete(id) {
     // Eliminación directa con DELETE ON CASCADE
     await this.executeQuery(`DELETE FROM Users WHERE UserID = ?`, [id]);

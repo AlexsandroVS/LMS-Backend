@@ -8,10 +8,10 @@ const auth = require('../middlewares/auth');
 router.use(auth.protect);
 
 router.get('/courses/:courseId/modules', modulesController.getCourseModules);
-router.post('/courses/:courseId/modules', auth.restrictTo('admin'), modulesController.createModule);
+router.post('/courses/:courseId/modules', auth.restrictTo('admin', 'teacher'), modulesController.createModule);
 
 router.get('/courses/:courseId/modules/:moduleId', modulesController.getModuleById);
-router.put('/courses/:courseId/modules/:moduleId', auth.restrictTo('admin'), modulesController.updateModule);
+router.put('/courses/:courseId/modules/:moduleId', auth.restrictTo('admin', 'teacher'), modulesController.updateModule);
 router.delete('/courses/:courseId/modules/:moduleId', auth.restrictTo('admin'), modulesController.deleteModule);
 
 module.exports = router;

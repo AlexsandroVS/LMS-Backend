@@ -9,16 +9,18 @@ exports.getAllEnrollments = async (req, res, next) => {
     next(error);
   }
 };
+
+// controllers/enrollmentController.js
 exports.getCoursesByStudent = async (req, res, next) => {
   try {
     const studentId = req.params.studentId;
-    const courseIds = await Enrollment.getCoursesByStudent(studentId);
-    res.json({ success: true, courseIds });
+    const courses = await Enrollment.getCoursesByStudent(studentId);
+    res.json({ success: true, courses });
   } catch (error) {
     next(error);
   }
-};
 
+};
 exports.getEnrollmentById = async (req, res, next) => {
   try {
     const enrollment = await Enrollment.getById(req.params.id);

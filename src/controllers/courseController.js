@@ -1,5 +1,7 @@
 const Course = require('../models/Course');
 const pool = require("../config/db");
+const path = require("path");
+const fs = require("fs");
 
 // 🔄 Utilidad para mapear cursos
 const mapCourse = (c) => ({
@@ -8,7 +10,6 @@ const mapCourse = (c) => ({
   description: c.Description,
   icon: c.Icon,
   status: c.Status,
-  durationHours: c.DurationHours,
   createdBy: c.CreatedBy,
   createdByName: c.CreatedByName,
   color: c.Color || "#48CAE4",
@@ -75,19 +76,51 @@ exports.updateCourse = async (req, res, next) => {
 };
 
 /* --------------------- Eliminar curso --------------------- */
-exports.deleteCourse = async (req, res, next) => {
+exports.deleteCourse = async (req, res) => {
   try {
-    const deleted = await Course.delete(req.params.id);
-    if (deleted) {
-      res.status(200).json({ message: "Curso eliminado exitosamente" });
-    } else {
-      res.status(404).json({ message: "Curso no encontrado" });
+    const { id } = req.params;
+
+    const [results] = await pool.query("SELECT Image FROM Courses WHERE CourseID = ?", [id]);
+
+    if (results.length === 0) {
+      return res.status(404).json({ error: "Curso no encontrado" });
     }
+
+    const imagePath = results[0].Image;
+
+    // Eliminar archivo físico si existe
+    if (imagePath) {
+      const fullPath = path.join(__dirname, "..", "..", "uploads", path.basename(imagePath));
+      if (fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+        console.log("✅ Imagen del curso eliminada:", fullPath);
+      }
+    }
+
+    await pool.query("DELETE FROM Courses WHERE CourseID = ?", [id]);
+
+    res.json({ message: "Curso eliminado correctamente" });
   } catch (error) {
-    console.error("Error al eliminar curso:", error);
-    res.status(500).json({ message: "Error interno al eliminar el curso" });
+    console.error("❌ Error al eliminar curso:", error);
+    res.status(500).json({ error: "Error al eliminar el curso" });
   }
 };
+
+// Función auxiliar para eliminar archivos de actividades
+async function deleteActivityFiles(conn, activityId) {
+  const [files] = await conn.query(
+    "SELECT FilePath FROM Files WHERE ActivityID = ?", 
+    [activityId]
+  );
+  
+  files.forEach(file => {
+    if (file.FilePath && fs.existsSync(file.FilePath)) {
+      fs.unlinkSync(file.FilePath);
+    }
+  });
+  
+  await conn.query("DELETE FROM Files WHERE ActivityID = ?", [activityId]);
+}
 
 /* --------------------- Sugerencias de búsqueda --------------------- */
 exports.getSearchSuggestions = async (req, res, next) => {

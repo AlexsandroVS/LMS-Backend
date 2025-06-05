@@ -11,15 +11,15 @@ const {
   deleteUser,
 } = require("../controllers/userController");
 
-// 📌 Configurar `multer` para almacenar imágenes en disco
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "uploads/"); // Guarda las imágenes en la carpeta "uploads"
+    cb(null, path.join(__dirname, '..', '..', 'uploads')); // Ruta absoluta
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname)); // Guardar con nombre único
-  },
+    const ext = path.extname(file.originalname);
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${uniqueSuffix}${ext}`); // Mismo formato que en el controlador
+  }
 });
 
 // 📌 Middleware de Multer para aceptar archivos

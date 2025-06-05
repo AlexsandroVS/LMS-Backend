@@ -1,7 +1,7 @@
 // src/controllers/authController.js
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
-const bcrypt = require('bcrypt');
+const bcrypt = require("bcrypt");
 
 // Función para generar el token
 const generateToken = (user) => {
@@ -36,7 +36,7 @@ exports.login = async (req, res, next) => {
     const now = new Date();
     await User.update(user.UserID, {
       LastLogin: now,
-      isActive: true
+      isActive: true,
     });
 
     const token = generateToken(user);
@@ -115,7 +115,9 @@ exports.getMe = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.getByEmail(decoded.email);
+    
+    // ✅ Obtener por ID en lugar de email
+    const user = await User.getById(decoded.id);
 
     if (!user) {
       return res.status(404).json({ error: "Usuario no encontrado" });
@@ -129,6 +131,9 @@ exports.getMe = async (req, res, next) => {
         role: user.Role,
         avatar: user.Avatar,
         biografia: user.Biografia || "",
+        isActive: user.IsActive,
+        LastLogin: user.LastLogin,
+        RegistrationDate: user.RegistrationDate,
       },
     });
   } catch (error) {
@@ -144,7 +149,7 @@ exports.logout = async (req, res, next) => {
     if (userId) {
       await User.update(userId, {
         LastLogin: new Date(),
-        isActive: false
+        isActive: false,
       });
     }
 
